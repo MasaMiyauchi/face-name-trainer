@@ -33,6 +33,9 @@ const App = (function() {
             // イベントマネージャーの初期化（これにより他のイベントリスナーが設定される）
             window.EventManager.init();
             
+            // 前回のセッションをチェック
+            window.EventManager.checkPreviousSession();
+            
             // 初期化完了
             appState.initialized = true;
             console.log('Application initialization complete');
@@ -75,8 +78,17 @@ const App = (function() {
             'FaceAPI', 'NameAPI', 'EventManager'
         ];
         
+        console.log('Checking required modules...');
+        
+        // 使用可能なモジュールのログ出力
+        const availableModules = Object.keys(window).filter(key => 
+            requiredModules.includes(key) && window[key] !== undefined
+        );
+        console.log('Available modules:', availableModules);
+        
         const missingModules = requiredModules.filter(module => !window[module]);
         if (missingModules.length > 0) {
+            console.error('Missing modules:', missingModules);
             throw new Error(`必要なモジュールが見つかりません: ${missingModules.join(', ')}`);
         }
     }
@@ -85,33 +97,41 @@ const App = (function() {
      * 各モジュールの初期化
      */
     function initializeModules() {
+        console.log('Initializing modules...');
+        
         // UIマネージャーの初期化
         if (typeof window.UIManager.init === 'function') {
+            console.log('Initializing UIManager');
             window.UIManager.init();
         }
         
         // モーダルの初期化
         if (typeof window.Modal.init === 'function') {
+            console.log('Initializing Modal');
             window.Modal.init();
         }
         
         // 難易度管理の初期化
         if (typeof window.Difficulty.init === 'function') {
+            console.log('Initializing Difficulty');
             window.Difficulty.init();
         }
         
         // 統計管理の初期化
         if (typeof window.Stats.init === 'function') {
+            console.log('Initializing Stats');
             window.Stats.init();
         }
         
         // ナビゲーションの初期化
         if (typeof window.Navigation.init === 'function') {
+            console.log('Initializing Navigation');
             window.Navigation.init();
         }
         
         // FaceAPIの事前ロード（オプション）
         if (typeof window.FaceAPI.preloadFaces === 'function') {
+            console.log('Preloading some face data');
             // 各地域からいくつかの顔を事前にロード
             appState.supportedRegions.forEach(region => {
                 window.FaceAPI.preloadFaces(2, region)
@@ -155,6 +175,7 @@ const App = (function() {
 
 // DOMContentLoaded時にアプリケーションを初期化
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM Content Loaded');
     // アプリケーションの初期化
     App.init();
 });
