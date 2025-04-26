@@ -9,6 +9,8 @@ const EventManager = (function() {
      * アプリケーションのイベントリスナーを設定する
      */
     function init() {
+        console.log('EventManager initializing...');
+        
         // UIマネージャーのイベントリスナーを設定
         setupUIEventListeners();
         
@@ -17,12 +19,15 @@ const EventManager = (function() {
         
         // ウィンドウイベントリスナーを設定
         setupWindowListeners();
+        
+        console.log('EventManager initialized');
     }
     
     /**
      * UIイベントリスナーを設定
      */
     function setupUIEventListeners() {
+        console.log('Setting up UI event listeners');
         // UIManagerにイベントハンドラを設定
         window.UIManager.setupEventListeners({
             // モード選択時のハンドラ
@@ -73,6 +78,37 @@ const EventManager = (function() {
                         currentState.difficulty
                     );
                 }
+            },
+            
+            // 学習開始ボタンのハンドラ
+            onStartLearning: function() {
+                console.log('Start learning button clicked');
+                
+                // 現在の選択状態を取得
+                const region = document.querySelector('.region-btn.selected')?.dataset.region;
+                const difficultyBtn = document.querySelector('.difficulty-btn.selected');
+                const count = difficultyBtn ? parseInt(difficultyBtn.dataset.count || 5, 10) : 5;
+                
+                if (!region) {
+                    console.error('No region selected');
+                    return;
+                }
+                
+                // ナビゲーション状態を設定
+                window.Navigation.setMode('learning');
+                window.Navigation.setRegion(region);
+                window.Navigation.setDifficulty(count);
+                window.Difficulty.setLevelByCount(count);
+                
+                // 学習モード画面に移動
+                window.Navigation.navigateTo('learning-mode');
+                
+                // 学習モードを開始
+                window.LearningMode.start(
+                    region,
+                    count,
+                    window.Difficulty.getTimePerFace()
+                );
             },
             
             // 「戻る」ボタンのハンドラ
@@ -142,9 +178,10 @@ const EventManager = (function() {
             
             // 統計ボタンのハンドラ
             onStatsClick: function() {
-                // 統計データを取得して表示
+                console.log('Stats button clicked');
+                
+                // 統計データを取得
                 const stats = window.Storage.getStats();
-                window.UIManager.showStats(stats);
                 
                 // 統計画面に移動
                 window.Navigation.navigateTo('stats');
@@ -192,29 +229,6 @@ const EventManager = (function() {
      * ウィンドウイベントリスナーを設定
      */
     function setupWindowListeners() {
-        // ページロード完了時
-        window.addEventListener('load', function() {
-            console.log('Application loaded');
-            
-            // UIマネージャーを初期化
-            window.UIManager.init();
-            
-            // モーダルを初期化
-            window.Modal.init();
-            
-            // 難易度管理を初期化
-            window.Difficulty.init();
-            
-            // 統計管理を初期化
-            window.Stats.init();
-            
-            // ナビゲーションを初期化
-            window.Navigation.init();
-            
-            // 前回のセッションをチェック
-            checkPreviousSession();
-        });
-        
         // ブラウザを閉じる前 / ページ移動前の処理
         window.addEventListener('beforeunload', function(event) {
             // 学習モードが進行中なら警告
@@ -259,7 +273,8 @@ const EventManager = (function() {
     
     // 公開API
     return {
-        init
+        init,
+        checkPreviousSession
     };
 })();
 
