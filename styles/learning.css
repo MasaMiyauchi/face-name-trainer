@@ -1,0 +1,54 @@
+/* 学習モード画面のスタイル */
+
+.progress-indicator {
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.timer-container {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.face-container {
+    text-align: center;
+    margin: 2rem 0;
+}
+
+.face-container img {
+    max-width: 100%;
+    height: auto;
+    max-height: 300px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+.name-display {
+    margin-top: 1.5rem;
+    font-size: 1.5rem;
+}
+
+.navigation-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2rem;
+}
+
+/* タイマー効果 */
+.timer-warning {
+    color: var(--warning-color);
+}
+
+.timer-danger {
+    color: var(--error-color);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
