@@ -1,0 +1,44 @@
+/* ホーム画面のスタイル */
+
+.options-container {
+    margin: 2rem 0;
+}
+
+.option-group {
+    margin-bottom: 2rem;
+}
+
+.region-selection, .difficulty-selection {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.region-btn, .difficulty-btn {
+    padding: 0.75rem 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: white;
+    transition: var(--transition);
+}
+
+.region-btn:hover, .difficulty-btn:hover {
+    border-color: var(--primary-color);
+}
+
+.region-btn.selected, .difficulty-btn.selected {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.start-container {
+    margin: 2rem 0;
+    text-align: center;
+}
+
+.stats-link {
+    text-align: center;
+    margin-top: 1rem;
+}
