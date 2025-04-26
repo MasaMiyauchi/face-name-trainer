@@ -30,3 +30,34 @@ const JapaneseNames = [
     { id: 23, firstName: '淳', lastName: '池田', gender: 'male' },
     { id: 24, firstName: '誠', lastName: '橋本', gender: 'male' },
     { id: 25, firstName: '優太', lastName: '阿部', gender: 'male' },
+    
+    // 女性名
+    { id: 26, firstName: '陽菜', lastName: '石川', gender: 'female' },
+    { id: 27, firstName: '葵', lastName: '前田', gender: 'female' },
+    { id: 28, firstName: '凛', lastName: '中川', gender: 'female' },
+    { id: 29, firstName: '澪', lastName: '小川', gender: 'female' },
+    { id: 30, firstName: '心春', lastName: '村上', gender: 'female' },
+    { id: 31, firstName: '結菜', lastName: '藤田', gender: 'female' },
+    { id: 32, firstName: '美咲', lastName: '後藤', gender: 'female' },
+    { id: 33, firstName: '楓', lastName: '岡田', gender: 'female' },
+    { id: 34, firstName: '杏', lastName: '野村', gender: 'female' },
+    { id: 35, firstName: '朱里', lastName: '増田', gender: 'female' },
+    { id: 36, firstName: '梨花', lastName: '平野', gender: 'female' },
+    { id: 37, firstName: '汐音', lastName: '青木', gender: 'female' },
+    { id: 38, firstName: '彩花', lastName: '菅原', gender: 'female' },
+    { id: 39, firstName: '優衣', lastName: '今井', gender: 'female' },
+    { id: 40, firstName: '莉子', lastName: '原田', gender: 'female' },
+    { id: 41, firstName: '花音', lastName: '宮崎', gender: 'female' },
+    { id: 42, firstName: '愛子', lastName: '安藤', gender: 'female' },
+    { id: 43, firstName: '美優', lastName: '内田', gender: 'female' },
+    { id: 44, firstName: '遥', lastName: '遠藤', gender: 'female' },
+    { id: 45, firstName: '小春', lastName: '和田', gender: 'female' },
+    { id: 46, firstName: '優奈', lastName: '村田', gender: 'female' },
+    { id: 47, firstName: '千晶', lastName: '上野', gender: 'female' },
+    { id: 48, firstName: '恵', lastName: '長谷川', gender: 'female' },
+    { id: 49, firstName: '美月', lastName: '金子', gender: 'female' },
+    { id: 50, firstName: '詩織', lastName: '太田', gender: 'female' }
+];
+
+// グローバルオブジェクトとしてエクスポート
+window.JapaneseNames = JapaneseNames;
