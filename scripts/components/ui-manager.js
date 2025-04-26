@@ -7,6 +7,17 @@ const UIManager = (function() {
     // DOM要素のキャッシュ
     const elements = {};
     
+    // 画面IDとDOM要素IDのマッピング
+    const screenMapping = {
+        'mode-selection': 'home-screen',
+        'region-selection': 'home-screen',
+        'difficulty-selection': 'home-screen',
+        'learning-mode': 'learning-screen',
+        'test-mode': 'test-screen',
+        'results': 'results-screen',
+        'stats': 'stats-screen'
+    };
+    
     /**
      * 初期化関数
      * 必要なDOM要素を取得してキャッシュに保存
@@ -73,6 +84,16 @@ const UIManager = (function() {
             startLearningBtn: document.getElementById('start-learning-btn'),
             viewStatsBtn: document.getElementById('view-stats-btn')
         };
+        
+        // ページ初期表示時のコンソールログ
+        console.log('UIManager initialized');
+        console.log('Available screens:', Object.keys(elements.sections));
+        
+        // ホーム画面の初期表示状態を確認
+        const homeScreenVisibility = elements.sections.homeScreen ? 
+            (elements.sections.homeScreen.classList.contains('active') ? 'active' : 'inactive') : 
+            'not found';
+        console.log('Home screen status:', homeScreenVisibility);
     }
     
     /**
@@ -80,6 +101,12 @@ const UIManager = (function() {
      * @param {string} sectionId - アクティブにするセクションのID
      */
     function showSection(sectionId) {
+        console.log(`Showing section: ${sectionId}`);
+        
+        // ナビゲーションマップのIDからDOM要素IDに変換
+        const domId = screenMapping[sectionId] || sectionId;
+        console.log(`Mapped to DOM ID: ${domId}`);
+        
         // すべてのセクションを非表示
         const allSections = document.querySelectorAll('.screen');
         allSections.forEach(section => {
@@ -89,11 +116,13 @@ const UIManager = (function() {
         });
         
         // 指定されたセクションを表示
-        const section = document.getElementById(sectionId);
+        const section = document.getElementById(domId);
         if (section) {
             section.classList.add('active');
+            console.log(`Section ${domId} activated`);
         } else {
-            console.error(`Section "${sectionId}" not found`);
+            console.error(`Section "${domId}" not found`);
+            console.log('Available sections:', Array.from(document.querySelectorAll('.screen')).map(el => el.id));
         }
     }
     
