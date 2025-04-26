@@ -1,19 +1,31 @@
 /**
  * face-api.js
- * This Person Does Not Exist APIと連携して、AI生成の顔画像を取得するためのモジュール
+ * AI生成の顔画像を取得するためのモジュール
  */
 
 const FaceAPI = (function() {
     // APIのURLを定義
     const API_URL = 'https://thispersondoesnotexist.com';
+    const CORS_PROXY = 'https://corsproxy.io/?'; // CORSプロキシサービス
+    
+    // バックアップ用のダミー画像URL
+    const DUMMY_IMAGES = {
+        'japan': 'assets/faces/japan/',
+        'usa': 'assets/faces/usa/',
+        'europe': 'assets/faces/europe/',
+        'asia': 'assets/faces/asia/',
+        'default': 'assets/default-face.jpg'
+    };
+    
     const TIMEOUT = 5000; // タイムアウト時間（ミリ秒）
     
     // キャッシュ用のオブジェクト
     let imageCache = {};
+    let useLocalImagesOnly = false; // オフラインモードフラグ
     
     /**
      * 新しいAI生成顔画像を取得する
-     * @param {string} region - 顔の地域タイプ（任意、現在のAPIではサポートされていない可能性あり）
+     * @param {string} region - 顔の地域タイプ
      * @returns {Promise<string>} - 画像のURLまたはdata URL
      */
     async function getFace(region = null) {
@@ -23,13 +35,28 @@ const FaceAPI = (function() {
                 return imageCache[region].pop();
             }
             
+            // オフラインモードの場合はダミー画像を返す
+            if (useLocalImagesOnly) {
+                return getLocalDummyImage(region);
+            }
+            
             // API制限回避のためのランダムパラメータを作成
             const timestamp = new Date().getTime();
-            const randomParam = `?t=${timestamp}`;
+            const randomParam = `t=${timestamp}`;
+            
+            // CORSプロキシ経由でAPIにアクセス
+            const url = `${CORS_PROXY}${encodeURIComponent(API_URL)}?${randomParam}`;
+            console.log('Fetching face from:', url);
             
             // fetch APIを使用して画像を取得
             const response = await Promise.race([
-                fetch(API_URL + randomParam),
+                fetch(url, {
+                    mode: 'cors',
+                    credentials: 'omit',
+                    headers: {
+                        'Accept': 'image/jpeg, image/png, */*'
+                    }
+                }),
                 new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('Request timeout')), TIMEOUT)
                 )
@@ -52,9 +79,32 @@ const FaceAPI = (function() {
             return dataUrl;
         } catch (error) {
             console.error('Error fetching face image:', error);
+            console.log('Falling back to local dummy image');
+            
+            // 一定回数エラーが続くとオフラインモードに切り替え
+            useLocalImagesOnly = true;
             
             // エラー時はダミー画像を返す
-            return 'assets/default-face.jpg';
+            return getLocalDummyImage(region);
+        }
+    }
+    
+    /**
+     * ローカルのダミー画像を取得
+     * @param {string} region - 顔の地域タイプ
+     * @returns {string} - ダミー画像のURL
+     */
+    function getLocalDummyImage(region) {
+        // 指定した地域用のフォルダがあるか確認
+        const basePath = DUMMY_IMAGES[region] || DUMMY_IMAGES['default'];
+        
+        if (basePath.endsWith('/')) {
+            // フォルダの場合、ランダムな番号を付けて画像を選択
+            const randomIndex = Math.floor(Math.random() * 5) + 1; // 1から5の範囲
+            return `${basePath}face${randomIndex}.jpg`;
+        } else {
+            // 単一のダミー画像の場合
+            return basePath;
         }
     }
     
@@ -69,17 +119,24 @@ const FaceAPI = (function() {
             imageCache[region] = [];
         }
         
-        const promises = [];
-        for (let i = 0; i < count; i++) {
-            promises.push(
-                getFace(region).then(face => {
-                    imageCache[region].push(face);
-                    return face;
-                })
-            );
+        try {
+            const promises = [];
+            for (let i = 0; i < count; i++) {
+                promises.push(
+                    getFace(region).then(face => {
+                        imageCache[region].push(face);
+                        return face;
+                    })
+                );
+            }
+            
+            await Promise.all(promises);
+            console.log(`Preloaded ${count} faces for region: ${region}`);
+        } catch (error) {
+            console.error(`Failed to preload faces for region ${region}:`, error);
+            // エラー時はオフラインモードに切り替え
+            useLocalImagesOnly = true;
         }
-        
-        await Promise.all(promises);
     }
     
     /**
@@ -89,11 +146,20 @@ const FaceAPI = (function() {
         imageCache = {};
     }
     
+    /**
+     * オフラインモードを設定
+     * @param {boolean} offline - オフラインモードにするかどうか
+     */
+    function setOfflineMode(offline) {
+        useLocalImagesOnly = offline;
+    }
+    
     // 公開API
     return {
         getFace,
         preloadFaces,
-        clearCache
+        clearCache,
+        setOfflineMode
     };
 })();
 
