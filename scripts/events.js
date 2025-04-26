@@ -6,176 +6,262 @@
 const EventManager = (function() {
     /**
      * 初期化関数
-     * 必要なイベントリスナーを設定
+     * アプリケーションのイベントリスナーを設定する
      */
     function init() {
-        // UIマネージャーにイベントハンドラーを設定
-        setupUIEventHandlers();
+        // UIマネージャーのイベントリスナーを設定
+        setupUIEventListeners();
         
-        // キーボードイベントを設定
-        setupKeyboardEvents();
+        // キーボードイベントリスナーを設定
+        setupKeyboardListeners();
         
-        // ウィンドウイベントを設定
-        setupWindowEvents();
+        // ウィンドウイベントリスナーを設定
+        setupWindowListeners();
     }
     
     /**
-     * UIイベントハンドラーを設定
+     * UIイベントリスナーを設定
      */
-    function setupUIEventHandlers() {
+    function setupUIEventListeners() {
+        // UIManagerにイベントハンドラを設定
         window.UIManager.setupEventListeners({
-            // モード選択時のハンドラー
+            // モード選択時のハンドラ
             onModeSelect: function(mode) {
                 console.log(`Mode selected: ${mode}`);
+                
+                // 選択されたモードを保存
                 window.Navigation.setMode(mode);
+                
+                // 次の画面（地域選択）に進む
                 window.Navigation.navigateNext('mode-selection');
             },
             
-            // 地域選択時のハンドラー
+            // 地域選択時のハンドラ
             onRegionSelect: function(region) {
                 console.log(`Region selected: ${region}`);
+                
+                // 選択された地域を保存
                 window.Navigation.setRegion(region);
+                
+                // 次の画面（難易度選択）に進む
                 window.Navigation.navigateNext('region-selection');
             },
             
-            // 難易度選択時のハンドラー
+            // 難易度選択時のハンドラ
             onDifficultySelect: function(count) {
                 console.log(`Difficulty selected: ${count}`);
-                window.Navigation.setDifficulty(count);
                 
-                // 難易度レベルを設定
+                // 選択された難易度を保存
+                window.Navigation.setDifficulty(count);
                 window.Difficulty.setLevelByCount(count);
                 
-                // 現在のモードに応じて学習モードまたはテストモードに遷移
+                // 現在のモードを取得
                 const currentState = window.Navigation.getCurrentState();
+                
+                // モードに応じて次の画面に進む
                 if (currentState.mode === 'learning') {
-                    startLearningMode(currentState.region, count);
+                    // 学習モードを開始
+                    window.LearningMode.start(
+                        currentState.region,
+                        currentState.difficulty,
+                        window.Difficulty.getTimePerFace()
+                    );
                 } else if (currentState.mode === 'test') {
-                    startTestMode(currentState.region, count);
+                    // テストモードを開始
+                    window.TestMode.start(
+                        currentState.region,
+                        currentState.difficulty
+                    );
                 }
             },
             
-            // 戻るボタンのハンドラー
+            // 「戻る」ボタンのハンドラ
             onBack: function(fromScreen) {
                 console.log(`Back from: ${fromScreen}`);
                 
-                // スクリーンIDを変換
-                const screenMapping = {
-                    'region': 'region-selection',
-                    'difficulty': 'difficulty-selection',
-                    'learning': 'learning-mode',
-                    'test': 'test-mode',
-                    'stats': 'stats'
-                };
-                
-                const screenId = screenMapping[fromScreen] || fromScreen;
-                
-                // 学習/テストモードからの戻りは確認
-                if (fromScreen === 'learning' || fromScreen === 'test') {
-                    window.Modal.confirm('本当に中断しますか？', '確認')
-                        .then(confirmed => {
-                            if (confirmed) {
-                                // モードを停止
-                                if (fromScreen === 'learning') {
+                switch (fromScreen) {
+                    case 'region':
+                        window.Navigation.navigateBack('region-selection');
+                        break;
+                        
+                    case 'difficulty':
+                        window.Navigation.navigateBack('difficulty-selection');
+                        break;
+                        
+                    case 'learning':
+                        // 学習モードの中断確認
+                        window.Modal.confirm('学習を中断しますか？', '確認')
+                            .then(confirmed => {
+                                if (confirmed) {
+                                    // 学習モードを停止
                                     window.LearningMode.stop();
-                                } else if (fromScreen === 'test') {
-                                    window.TestMode.stop();
+                                    // メニューに戻る
+                                    window.Navigation.backToMenu();
                                 }
-                                
-                                // メニューに戻る
-                                window.Navigation.navigateBack(screenId);
-                            }
-                        });
-                } else {
-                    // 通常の戻り
-                    window.Navigation.navigateBack(screenId);
+                            });
+                        break;
+                        
+                    case 'test':
+                        // テストモードの中断確認
+                        window.Modal.confirm('テストを中断しますか？', '確認')
+                            .then(confirmed => {
+                                if (confirmed) {
+                                    // テストモードを停止
+                                    window.TestMode.stop();
+                                    // メニューに戻る
+                                    window.Navigation.backToMenu();
+                                }
+                            });
+                        break;
+                        
+                    case 'stats':
+                        window.Navigation.navigateBack('stats');
+                        break;
+                        
+                    default:
+                        // デフォルトはメニューに戻る
+                        window.Navigation.backToMenu();
                 }
             },
             
-            // 学習モードで次の顔に進むハンドラー
+            // 学習モードで「次へ」ボタンのハンドラ
             onNextFace: function() {
-                console.log('Next face');
                 window.LearningMode.nextFace();
             },
             
-            // テスト後のリトライハンドラー
+            // テスト結果画面で「もう一度挑戦」ボタンのハンドラ
             onRetry: function() {
-                console.log('Retry test');
+                window.Navigation.retry();
                 window.TestMode.retry();
             },
             
-            // メニューに戻るハンドラー
+            // テスト結果画面で「メニューに戻る」ボタンのハンドラ
             onBackToMenu: function() {
-                console.log('Back to menu');
                 window.Navigation.backToMenu();
             },
             
-            // 統計表示ハンドラー
+            // 統計ボタンのハンドラ
             onStatsClick: function() {
-                console.log('Show stats');
-                showStats();
+                // 統計データを取得して表示
+                const stats = window.Storage.getStats();
+                window.UIManager.showStats(stats);
+                
+                // 統計画面に移動
+                window.Navigation.navigateTo('stats');
             }
         });
     }
     
     /**
-     * キーボードイベントを設定
+     * キーボードイベントリスナーを設定
      */
-    function setupKeyboardEvents() {
+    function setupKeyboardListeners() {
         document.addEventListener('keydown', function(event) {
             // ESCキーでモーダルを閉じる
             if (event.key === 'Escape') {
                 window.Modal.hide();
             }
             
-            // スペースキーで次の顔に進む（学習モード時）
-            if (event.key === ' ' || event.key === 'Spacebar') {
-                const currentState = window.Navigation.getCurrentState();
-                if (currentState && currentState.mode === 'learning') {
+            // 現在のナビゲーション状態を取得
+            const currentState = window.Navigation.getCurrentState();
+            
+            // 学習モード中のキーボードショートカット
+            if (currentState.mode === 'learning') {
+                // スペースキーで次の顔に進む
+                if (event.key === ' ' || event.key === 'ArrowRight') {
                     window.LearningMode.nextFace();
-                    event.preventDefault(); // スクロールを防止
                 }
             }
             
-            // 数字キー（1-4）で選択肢を選択（テストモード時）
-            if (['1', '2', '3', '4'].includes(event.key)) {
-                const currentState = window.Navigation.getCurrentState();
-                if (currentState && currentState.mode === 'test') {
-                    const optionIndex = parseInt(event.key) - 1;
-                    // TODO: 選択肢選択処理の実装
-                    event.preventDefault();
+            // テストモード中のキーボードショートカット
+            if (currentState.mode === 'test') {
+                // 数字キー（1-4）で選択肢を選択
+                const num = parseInt(event.key);
+                if (num >= 1 && num <= 4) {
+                    // 該当する選択肢の要素を取得
+                    const options = document.querySelectorAll('.name-option');
+                    if (options.length >= num) {
+                        options[num - 1].click();
+                    }
                 }
             }
         });
     }
     
     /**
-     * ウィンドウイベントを設定
+     * ウィンドウイベントリスナーを設定
      */
-    function setupWindowEvents() {
-        // ウィンドウロード時の処理
+    function setupWindowListeners() {
+        // ページロード完了時
         window.addEventListener('load', function() {
-            console.log('Window loaded');
+            console.log('Application loaded');
             
-            // 前回の学習セッションがあれば復元するか確認
-            window.LearningMode.restoreSession()
-                .then(restored => {
-                    if (!restored) {
-                        // 復元しなかった場合は最初の画面を表示
-                        window.Navigation.navigateTo('mode-selection');
-                    }
-                });
+            // UIマネージャーを初期化
+            window.UIManager.init();
+            
+            // モーダルを初期化
+            window.Modal.init();
+            
+            // 難易度管理を初期化
+            window.Difficulty.init();
+            
+            // 統計管理を初期化
+            window.Stats.init();
+            
+            // ナビゲーションを初期化
+            window.Navigation.init();
+            
+            // 前回のセッションをチェック
+            checkPreviousSession();
         });
         
-        // ページ離脱時の処理
+        // ブラウザを閉じる前 / ページ移動前の処理
         window.addEventListener('beforeunload', function(event) {
+            // 学習モードが進行中なら警告
             const currentState = window.Navigation.getCurrentState();
-            
-            // 学習/テストモード中なら警告
-            if (currentState && (currentState.mode === 'learning' || currentState.mode === 'test')) {
+            if (currentState.mode === 'learning') {
+                // 標準的なブラウザの確認ダイアログを表示
                 event.preventDefault();
-                event.returnValue = '進行中のセッションがあります。本当に終了しますか？';
+                event.returnValue = '学習が進行中です。本当にページを離れますか？';
                 return event.returnValue;
             }
         });
     }
+    
+    /**
+     * 前回のセッションを確認
+     */
+    async function checkPreviousSession() {
+        try {
+            // 学習セッションの復元を試みる
+            const restored = await window.LearningMode.restoreSession();
+            
+            // 復元失敗時は何もしない（初期画面のまま）
+            if (!restored) {
+                // 必要に応じて前回の使用地域や難易度を復元
+                const lastRegion = window.Storage.getLastRegion();
+                const lastDifficulty = window.Storage.getLastDifficulty();
+                
+                if (lastRegion) {
+                    window.Navigation.setRegion(lastRegion);
+                }
+                
+                if (lastDifficulty) {
+                    window.Navigation.setDifficulty(lastDifficulty);
+                    window.Difficulty.setLevelByCount(lastDifficulty);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking previous session:', error);
+            // エラー時は初期画面を表示
+        }
+    }
+    
+    // 公開API
+    return {
+        init
+    };
+})();
+
+// グローバルオブジェクトとしてエクスポート
+window.EventManager = EventManager;
