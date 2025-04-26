@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaceNameTrainer - 顔と名前の記憶トレーニングアプリ</title>
+    <meta name="description" content="顔と名前を記憶する能力を向上させるためのトレーニングアプリケーション">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Favicon -->
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="app-header">
+            <h1>FaceNameTrainer</h1>
+            <p class="subtitle">顔と名前の記憶トレーニングアプリ</p>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <main class="app-content">
+            <!-- ホーム画面 -->
+            <section id="home-screen" class="screen active">
+                <h2>顔と名前の記憶トレーニング</h2>
+                <p>AI生成された顔画像と名前を使って、記憶力を鍛えましょう。</p>
+                
+                <div class="options-container">
+                    <div class="option-group">
+                        <h3>トレーニングする国・地域を選択</h3>
+                        <div class="region-selection">
+                            <button class="region-btn" data-region="japan">日本</button>
+                            <button class="region-btn" data-region="usa">アメリカ</button>
+                            <button class="region-btn" data-region="europe">ヨーロッパ</button>
+                            <button class="region-btn" data-region="asia">アジア</button>
+                        </div>
+                    </div>
+                    
+                    <div class="option-group">
+                        <h3>難易度設定</h3>
+                        <div class="difficulty-selection">
+                            <button class="difficulty-btn" data-difficulty="easy">初級（5人）</button>
+                            <button class="difficulty-btn" data-difficulty="medium">中級（10人）</button>
+                            <button class="difficulty-btn" data-difficulty="hard">上級（15人）</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="start-container">
+                    <button id="start-learning-btn" class="primary-btn" disabled>学習開始</button>
+                </div>
+                
+                <div class="stats-link">
+                    <a href="#" id="view-stats-btn">過去の成績を確認する</a>
+                </div>
+            </section>
+
+            <!-- 学習モード画面 -->
+            <section id="learning-screen" class="screen">
+                <h2>学習モード</h2>
+                <div class="progress-indicator">
+                    <span id="current-face">1</span> / <span id="total-faces">5</span>
+                </div>
+                
+                <div class="timer-container">
+                    残り時間: <span id="timer">30</span>秒
+                </div>
+                
+                <div class="face-container">
+                    <img id="face-image" src="" alt="顔画像">
+                    <div class="name-display">
+                        <h3 id="face-name"></h3>
+                    </div>
+                </div>
+                
+                <div class="navigation-buttons">
+                    <button id="previous-face-btn" class="secondary-btn" disabled>前へ</button>
+                    <button id="next-face-btn" class="secondary-btn">次へ</button>
+                    <button id="finish-learning-btn" class="primary-btn">学習完了</button>
+                </div>
+            </section>
+
+            <!-- テストモード画面 -->
+            <section id="test-screen" class="screen">
+                <h2>テストモード</h2>
+                <div class="progress-indicator">
+                    <span id="current-test-face">1</span> / <span id="total-test-faces">5</span>
+                </div>
+                
+                <div class="face-container">
+                    <img id="test-face-image" src="" alt="顔画像">
+                    <div class="answer-container">
+                        <input type="text" id="name-answer" placeholder="名前を入力してください">
+                        <button id="submit-answer-btn" class="primary-btn">回答</button>
+                    </div>
+                </div>
+                
+                <div class="feedback-container" id="answer-feedback">
+                    <!-- 回答結果のフィードバックがここに表示されます -->
+                </div>
+                
+                <div class="navigation-buttons">
+                    <button id="next-test-btn" class="secondary-btn" disabled>次の問題へ</button>
+                    <button id="finish-test-btn" class="primary-btn">テスト終了</button>
+                </div>
+            </section>
+
+            <!-- 結果画面 -->
+            <section id="results-screen" class="screen">
+                <h2>テスト結果</h2>
+                
+                <div class="results-summary">
+                    <div class="score-container">
+                        <h3>正解率</h3>
+                        <div class="score" id="score-percentage">0%</div>
+                        <div class="score-details">
+                            <span id="correct-answers">0</span> / <span id="total-questions">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="time-container">
+                        <h3>平均回答時間</h3>
+                        <div id="average-time">0.0秒</div>
+                    </div>
+                </div>
+                
+                <div class="results-details">
+                    <h3>詳細結果</h3>
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>顔</th>
+                                <th>正しい名前</th>
+                                <th>あなたの回答</th>
+                                <th>結果</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-table-body">
+                            <!-- 結果の詳細がここに表示されます -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="try-again-btn" class="secondary-btn">もう一度挑戦</button>
+                    <button id="back-to-home-btn" class="primary-btn">ホームに戻る</button>
+                </div>
+            </section>
+
+            <!-- 統計画面 -->
+            <section id="stats-screen" class="screen">
+                <h2>学習進捗</h2>
+                
+                <div class="stats-summary">
+                    <div class="stats-card">
+                        <h3>累計トレーニング回数</h3>
+                        <div class="stat-value" id="total-training-count">0</div>
+                    </div>
+                    
+                    <div class="stats-card">
+                        <h3>平均正解率</h3>
+                        <div class="stat-value" id="average-score">0%</div>
+                    </div>
+                    
+                    <div class="stats-card">
+                        <h3>最高正解率</h3>
+                        <div class="stat-value" id="best-score">0%</div>
+                    </div>
+                </div>
+                
+                <div class="stats-details">
+                    <h3>苦手な顔</h3>
+                    <div class="weak-faces-container" id="weak-faces-list">
+                        <!-- 苦手な顔のリストがここに表示されます -->
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="back-from-stats-btn" class="primary-btn">ホームに戻る</button>
+                </div>
+            </section>
+            
+            <!-- 間隔反復テスト画面 -->
+            <section id="spaced-repetition-screen" class="screen">
+                <h2>間隔反復テスト</h2>
+                <p>過去に学習した顔の記憶を定着させるテストです。</p>
+                
+                <div class="progress-indicator">
+                    <span id="current-sr-face">1</span> / <span id="total-sr-faces">5</span>
+                </div>
+                
+                <div class="face-container">
+                    <img id="sr-face-image" src="" alt="顔画像">
+                    <div class="answer-container">
+                        <input type="text" id="sr-name-answer" placeholder="名前を入力してください">
+                        <button id="sr-submit-answer-btn" class="primary-btn">回答</button>
+                    </div>
+                </div>
+                
+                <div class="feedback-container" id="sr-answer-feedback">
+                    <!-- 回答結果のフィードバックがここに表示されます -->
+                </div>
+                
+                <div class="navigation-buttons">
+                    <button id="next-sr-btn" class="secondary-btn" disabled>次の問題へ</button>
+                    <button id="finish-sr-btn" class="primary-btn">テスト終了</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- フッター -->
+        <footer class="app-footer">
+            <p>FaceNameTrainer &copy; 2025 - 記憶力向上のための教育目的アプリケーション</p>
+        </footer>
+    </div>
+
+    <!-- モーダル -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div id="modal-container" class="modal-container">
+            <div class="modal-header">
+                <h3 id="modal-title">タイトル</h3>
+                <button id="modal-close" class="modal-close-btn">&times;</button>
+            </div>
+            <div id="modal-content" class="modal-content">
+                <!-- モーダルコンテンツがここに表示されます -->
+            </div>
+            <div class="modal-footer">
+                <button id="modal-confirm-btn" class="primary-btn">確認</button>
+                <button id="modal-cancel-btn" class="secondary-btn">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- スクリプト -->
+    <!-- コンポーネント -->
+    <script src="scripts/components/ui-manager.js"></script>
+    <script src="scripts/components/modal.js"></script>
+    <script src="scripts/components/navigation.js"></script>
+    
+    <!-- ユーティリティ -->
+    <script src="scripts/utils/storage.js"></script>
+    <script src="scripts/utils/timer.js"></script>
+    <script src="scripts/utils/helpers.js"></script>
+    
+    <!-- API -->
+    <script src="scripts/api/face-api.js"></script>
+    <script src="scripts/api/name-api.js"></script>
+    
+    <!-- 名前データ -->
+    <script src="scripts/names/japan.js"></script>
+    <script src="scripts/names/usa.js"></script>
+    
+    <!-- モジュール -->
+    <script src="scripts/modules/difficulty.js"></script>
+    <script src="scripts/modules/learning-mode.js"></script>
+    <script src="scripts/modules/test-mode.js"></script>
+    <script src="scripts/modules/stats.js"></script>
+    
+    <!-- イベント -->
+    <script src="scripts/events.js"></script>
+    
+    <!-- メイン -->
+    <script src="scripts/app.js"></script>
+</body>
+</html>
