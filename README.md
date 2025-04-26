@@ -35,7 +35,14 @@
 ```
 face-name-trainer/
 ├── index.html                # メインのHTMLファイル
-├── styles.css                # スタイルシート
+├── styles.css                # メインスタイルシート（変数とベーススタイル）
+├── styles/                   # コンポーネント別スタイルシート
+│   ├── home.css              # ホーム画面のスタイル
+│   ├── learning.css          # 学習モード画面のスタイル
+│   ├── test.css              # テストモード画面のスタイル
+│   ├── results.css           # 結果画面のスタイル
+│   ├── stats.css             # 統計画面のスタイル
+│   └── modal.css             # モーダルコンポーネントのスタイル
 ├── scripts/
 │   ├── app.js                # メインアプリケーション初期化
 │   ├── api/
@@ -48,7 +55,9 @@ face-name-trainer/
 │   ├── names/                # 各国・地域別の名前データディレクトリ
 │   │   ├── README.md         # 名前データ説明
 │   │   ├── japan.js          # 日本の名前データ
-│   │   └── usa.js            # アメリカの名前データ
+│   │   ├── usa.js            # アメリカの名前データ
+│   │   ├── europe.js         # ヨーロッパの名前データ (予定)
+│   │   └── asia.js           # アジアの名前データ (予定)
 │   ├── utils/
 │   │   ├── storage.js        # ローカルストレージ操作
 │   │   ├── timer.js          # タイマー機能
@@ -57,7 +66,8 @@ face-name-trainer/
 │   │   ├── learning-mode.js  # 学習モードロジック
 │   │   ├── test-mode.js      # テストモードロジック
 │   │   ├── stats.js          # 統計・進捗管理
-│   │   └── difficulty.js     # 難易度設定管理
+│   │   ├── difficulty.js     # 難易度設定管理
+│   │   └── spaced-rep.js     # 間隔反復システム (予定)
 │   └── events.js             # イベントリスナー管理
 ├── assets/                   # 静的アセット（アイコンなど）
 └── README.md                 # このファイル
