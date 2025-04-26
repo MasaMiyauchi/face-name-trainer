@@ -65,3 +65,189 @@ const Storage = (function() {
             return false;
         }
     }
+    
+    /**
+     * ローカルストレージの内容をすべて消去
+     * @returns {boolean} - 消去が成功したかどうか
+     */
+    function clear() {
+        try {
+            localStorage.clear();
+            return true;
+        } catch (error) {
+            console.error('Error clearing localStorage:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * テスト結果を保存
+     * @param {Object} resultData - テスト結果データ
+     * @returns {boolean} - 保存が成功したかどうか
+     */
+    function saveTestResult(resultData) {
+        // 既存の結果を取得
+        const results = load(KEYS.RESULTS, []);
+        
+        // タイムスタンプを追加
+        const resultWithTimestamp = {
+            ...resultData,
+            timestamp: new Date().getTime()
+        };
+        
+        // 新しい結果を追加
+        results.push(resultWithTimestamp);
+        
+        // 結果を保存
+        return save(KEYS.RESULTS, results);
+    }
+    
+    /**
+     * 統計データを取得
+     * @returns {Object} - 統計データ
+     */
+    function getStats() {
+        return load(KEYS.STATS, {
+            totalTests: 0,
+            averageScore: 0,
+            regionStats: {},
+            weakFaces: []
+        });
+    }
+    
+    /**
+     * 統計データを更新
+     * @param {Object} testResult - テスト結果データ
+     * @returns {boolean} - 更新が成功したかどうか
+     */
+    function updateStats(testResult) {
+        const stats = getStats();
+        const { region, correctCount, totalCount, faces } = testResult;
+        
+        // 総テスト回数を更新
+        stats.totalTests += 1;
+        
+        // 平均正解率を更新
+        const totalCorrect = (stats.averageScore * (stats.totalTests - 1) / 100) + correctCount;
+        stats.averageScore = (totalCorrect / stats.totalTests) * 100;
+        
+        // 地域別統計を更新
+        if (!stats.regionStats[region]) {
+            stats.regionStats[region] = {
+                tests: 0,
+                averageScore: 0
+            };
+        }
+        
+        const regionStat = stats.regionStats[region];
+        regionStat.tests += 1;
+        
+        const regionTotalCorrect = (regionStat.averageScore * (regionStat.tests - 1) / 100) + correctCount;
+        regionStat.averageScore = (regionTotalCorrect / regionStat.tests) * 100;
+        
+        // 苦手な顔を更新
+        const incorrectFaces = faces.filter(face => !face.correct);
+        for (const face of incorrectFaces) {
+            const existingWeakFace = stats.weakFaces.find(wf => wf.faceId === face.faceId);
+            
+            if (existingWeakFace) {
+                existingWeakFace.count += 1;
+            } else {
+                stats.weakFaces.push({
+                    faceId: face.faceId,
+                    faceUrl: face.faceUrl,
+                    name: face.name,
+                    region: region,
+                    count: 1
+                });
+            }
+        }
+        
+        // 苦手な顔を出現回数の降順にソート
+        stats.weakFaces.sort((a, b) => b.count - a.count);
+        
+        // 統計を保存
+        return save(KEYS.STATS, stats);
+    }
+    
+    /**
+     * 最後に使用した地域を保存
+     * @param {string} region - 地域識別子
+     * @returns {boolean} - 保存が成功したかどうか
+     */
+    function saveLastRegion(region) {
+        return save(KEYS.LAST_REGION, region);
+    }
+    
+    /**
+     * 最後に使用した地域を取得
+     * @returns {string|null} - 地域識別子またはnull
+     */
+    function getLastRegion() {
+        return load(KEYS.LAST_REGION, null);
+    }
+    
+    /**
+     * 最後に使用した難易度を保存
+     * @param {number} difficulty - 難易度（人数）
+     * @returns {boolean} - 保存が成功したかどうか
+     */
+    function saveLastDifficulty(difficulty) {
+        return save(KEYS.LAST_DIFFICULTY, difficulty);
+    }
+    
+    /**
+     * 最後に使用した難易度を取得
+     * @returns {number|null} - 難易度（人数）またはnull
+     */
+    function getLastDifficulty() {
+        return load(KEYS.LAST_DIFFICULTY, null);
+    }
+    
+    /**
+     * トレーニングセッションデータを保存（学習モードでの中断用）
+     * @param {Object} sessionData - セッションデータ
+     * @returns {boolean} - 保存が成功したかどうか
+     */
+    function saveSession(sessionData) {
+        return save(KEYS.TRAINING_SESSION, sessionData);
+    }
+    
+    /**
+     * トレーニングセッションデータを取得
+     * @returns {Object|null} - セッションデータまたはnull
+     */
+    function getSession() {
+        return load(KEYS.TRAINING_SESSION, null);
+    }
+    
+    /**
+     * トレーニングセッションデータを削除
+     * @returns {boolean} - 削除が成功したかどうか
+     */
+    function clearSession() {
+        return remove(KEYS.TRAINING_SESSION);
+    }
+    
+    // 公開API
+    return {
+        save,
+        load,
+        remove,
+        clear,
+        saveTestResult,
+        getStats,
+        updateStats,
+        saveLastRegion,
+        getLastRegion,
+        saveLastDifficulty,
+        getLastDifficulty,
+        saveSession,
+        getSession,
+        clearSession,
+        KEYS
+    };
+})();
+
+// グローバルオブジェクトとしてエクスポート
+window.Storage = Storage;
