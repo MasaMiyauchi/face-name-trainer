@@ -1,0 +1,85 @@
+/* 統計画面のスタイル */
+
+.stats-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-around;
+    margin-bottom: 2rem;
+}
+
+.stats-card {
+    background-color: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+    min-width: 180px;
+    text-align: center;
+    flex: 1;
+}
+
+.stats-card h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--light-text);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.stats-details {
+    margin: 2rem 0;
+}
+
+.weak-faces-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.weak-face-card {
+    background-color: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 1rem;
+    text-align: center;
+    transition: var(--transition);
+}
+
+.weak-face-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.weak-face-img {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto 1rem;
+    display: block;
+}
+
+.weak-face-name {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.weak-face-score {
+    color: var(--error-color);
+    font-size: 0.9rem;
+}
+
+/* 進捗グラフ */
+.progress-chart {
+    margin: 2rem 0;
+}
+
+.chart-container {
+    height: 300px;
+    margin-top: 1.5rem;
+}
