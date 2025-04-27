@@ -40,6 +40,11 @@ const LearningMode = (function() {
         };
         
         try {
+            // まず先にFaceGeneratorを初期化
+            if (window.FaceGenerator) {
+                await window.FaceGenerator.init();
+            }
+            
             // 顔画像と名前のペアをロード
             await loadFacesAndNames(region, difficulty);
             
@@ -47,7 +52,7 @@ const LearningMode = (function() {
             updateUI();
             
             // セクションを表示
-            window.UIManager.showSection('learning-mode');
+            window.UIManager.showSection('learning-screen');
             
             // タイマーを開始
             startFaceTimer();
@@ -118,36 +123,56 @@ const LearningMode = (function() {
                 buttons: []
             });
             
-            // 非同期処理を開始
             // 名前データを取得
             const names = await window.NameAPI.getRandomNames(region, count);
             
-            // 顔画像を事前にロード
-            const faces = [];
-            for (let i = 0; i < count; i++) {
+            // FaceGeneratorを使用して顔データを取得
+            let faces = [];
+            if (window.FaceGenerator) {
                 try {
-                    const faceUrl = await window.FaceAPI.getFace(region);
-                    faces.push(faceUrl);
-                } catch (error) {
-                    console.error('Error loading face image:', error);
-                    // エラー時はダミー画像を使用
-                    faces.push('assets/default-face.jpg');
+                    // FaceGeneratorから顔を取得
+                    faces = await window.FaceGenerator.getRandomFaces(region, count);
+                    
+                    // ロード中モーダルを更新
+                    if (window.Modal.updateMessage) {
+                        window.Modal.updateMessage('顔データの取得が完了しました。セッションを準備しています...');
+                    }
+                } catch (genError) {
+                    console.error('Error using FaceGenerator:', genError);
+                    // エラー時はFallbackとして従来のFaceAPIを使用
+                    faces = await fallbackLoadFaces(region, count);
                 }
-                
-                // ロード進捗を更新
-                if (window.Modal.updateMessage) {
-                    const progress = Math.round((i + 1) / count * 100);
-                    window.Modal.updateMessage(`顔と名前のデータをロードしています... ${progress}%`);
-                }
+            } else {
+                // FaceGeneratorが利用できない場合は従来のFaceAPIを使用
+                faces = await fallbackLoadFaces(region, count);
             }
             
             // 顔と名前のペアを作成
-            sessionState.facesAndNames = names.map((name, index) => ({
-                id: name.id,
-                name: name,
-                faceUrl: faces[index] || 'assets/default-face.jpg',
-                region: region
-            }));
+            sessionState.facesAndNames = [];
+            for (let i = 0; i < count; i++) {
+                const name = names[i];
+                const face = faces[i] || null;
+                
+                let faceUrl;
+                if (face && face.imageData) {
+                    // FaceGenerator形式のデータ
+                    faceUrl = face.imageData;
+                } else if (face) {
+                    // 直接URLの場合
+                    faceUrl = face;
+                } else {
+                    // データがない場合はデフォルト
+                    faceUrl = 'assets/default-face.jpg';
+                }
+                
+                sessionState.facesAndNames.push({
+                    id: name.id || `face-${i}`,
+                    name: name,
+                    faceUrl: faceUrl,
+                    region: region,
+                    faceData: face // 生成器から取得した元データも保持
+                });
+            }
             
             // ロード中モーダルを閉じる
             window.Modal.hide();
@@ -161,6 +186,35 @@ const LearningMode = (function() {
     }
     
     /**
+     * 従来のFaceAPIを使用して顔画像をロード（フォールバック）
+     * @param {string} region - 地域識別子
+     * @param {number} count - ロードする顔の数
+     * @returns {Promise<Array>} - 顔画像URLの配列
+     */
+    async function fallbackLoadFaces(region, count) {
+        const faces = [];
+        
+        for (let i = 0; i < count; i++) {
+            try {
+                const faceUrl = await window.FaceAPI.getFace(region);
+                faces.push(faceUrl);
+            } catch (error) {
+                console.error('Error loading face image:', error);
+                // エラー時はダミー画像を使用
+                faces.push('assets/default-face.jpg');
+            }
+            
+            // ロード進捗を更新
+            if (window.Modal.updateMessage) {
+                const progress = Math.round((i + 1) / count * 100);
+                window.Modal.updateMessage(`顔と名前のデータをロードしています... ${progress}%`);
+            }
+        }
+        
+        return faces;
+    }
+    
+    /**
      * UI要素を更新
      */
     function updateUI() {
@@ -170,15 +224,68 @@ const LearningMode = (function() {
         
         const currentPair = sessionState.facesAndNames[sessionState.currentIndex];
         
-        // UIマネージャーを使って顔と名前を更新
-        window.UIManager.updateLearningFace(
-            currentPair.faceUrl,
-            currentPair.name,
-            sessionState.region
-        );
+        // 進捗表示を更新
+        const currentFaceElement = document.getElementById('current-face');
+        const totalFacesElement = document.getElementById('total-faces');
+        
+        if (currentFaceElement) {
+            currentFaceElement.textContent = (sessionState.currentIndex + 1).toString();
+        }
+        
+        if (totalFacesElement) {
+            totalFacesElement.textContent = sessionState.facesAndNames.length.toString();
+        }
+        
+        // 顔画像を更新
+        const faceImageElement = document.getElementById('face-image');
+        if (faceImageElement) {
+            faceImageElement.src = currentPair.faceUrl;
+        }
+        
+        // 名前を更新
+        const faceNameElement = document.getElementById('face-name');
+        if (faceNameElement) {
+            // フルネームを表示
+            const name = currentPair.name;
+            let displayName;
+            
+            if (name.firstName && name.lastName) {
+                // 地域に応じて姓名の順序を変更
+                if (sessionState.region === 'japan' || sessionState.region === 'asia') {
+                    displayName = `${name.lastName} ${name.firstName}`;
+                } else {
+                    displayName = `${name.firstName} ${name.lastName}`;
+                }
+            } else {
+                // 名前データがおかしい場合のフォールバック
+                displayName = name.firstName || name.lastName || '名前なし';
+            }
+            
+            faceNameElement.textContent = displayName;
+        }
         
         // タイマー表示を更新
-        window.UIManager.updateLearningTimer(sessionState.timePerFace);
+        const timerElement = document.getElementById('timer');
+        if (timerElement) {
+            timerElement.textContent = sessionState.timePerFace.toString();
+        }
+        
+        // ナビゲーションボタンの状態を更新
+        const prevButton = document.getElementById('previous-face-btn');
+        const nextButton = document.getElementById('next-face-btn');
+        const finishButton = document.getElementById('finish-learning-btn');
+        
+        if (prevButton) {
+            prevButton.disabled = sessionState.currentIndex <= 0;
+        }
+        
+        if (nextButton) {
+            nextButton.disabled = sessionState.currentIndex >= sessionState.facesAndNames.length - 1;
+        }
+        
+        if (finishButton) {
+            finishButton.disabled = sessionState.currentIndex < sessionState.facesAndNames.length - 1;
+        }
     }
     
     /**
@@ -194,7 +301,10 @@ const LearningMode = (function() {
             sessionState.timePerFace,
             (secondsLeft) => {
                 // 残り時間表示を更新
-                window.UIManager.updateLearningTimer(secondsLeft);
+                const timerElement = document.getElementById('timer');
+                if (timerElement) {
+                    timerElement.textContent = secondsLeft.toString();
+                }
             },
             () => {
                 // タイマー終了時の処理
@@ -220,6 +330,31 @@ const LearningMode = (function() {
         if (sessionState.currentIndex >= sessionState.facesAndNames.length) {
             completeSession();
             return;
+        }
+        
+        // UI要素を更新
+        updateUI();
+        
+        // タイマーを再開
+        startFaceTimer();
+        
+        // セッションデータを保存
+        saveSession();
+    }
+    
+    /**
+     * 前の顔に戻る
+     */
+    function previousFace() {
+        // タイマーを停止
+        if (sessionState.stopTimer) {
+            sessionState.stopTimer();
+            sessionState.stopTimer = null;
+        }
+        
+        // インデックスを戻す
+        if (sessionState.currentIndex > 0) {
+            sessionState.currentIndex--;
         }
         
         // UI要素を更新
@@ -320,7 +455,7 @@ const LearningMode = (function() {
         updateUI();
         
         // セクションを表示
-        window.UIManager.showSection('learning-mode');
+        window.UIManager.showSection('learning-screen');
         
         // タイマーを開始
         startFaceTimer();
@@ -335,7 +470,9 @@ const LearningMode = (function() {
         pause,
         resume,
         nextFace,
-        restoreSession
+        previousFace,
+        restoreSession,
+        completeSession
     };
 })();
 
