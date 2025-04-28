@@ -2,6 +2,45 @@
 
 このリポジトリは、顔と名前を記憶する能力を向上させるためのトレーニングアプリケーションのコードを提供します。AI生成された顔画像と名前を使用して記憶力を鍛えることができます。
 
+## 最近の更新（2025年4月28日）
+
+### IndexedDBの導入による容量制限問題の解決
+
+学習モードで発生していた以下のエラーを修正しました：
+
+```
+storage.js:30 Error saving to localStorage: QuotaExceededError: Failed to execute 'setItem' on 'Storage': Setting the value of 'faceTrainer.session' exceeded the quota.
+```
+
+**問題点：**
+- 顔画像のデータ（Base64形式）が原因でlocalStorageの容量上限（5-10MB）に達していました
+- 特に多数の顔画像を学習する際に問題が発生していました
+
+**対応策：**
+1. **画像サイズの最適化**
+   - 画像サイズを256x256ピクセルに制限
+   - 画質を85%に設定して容量を削減
+   - アスペクト比は維持
+
+2. **IndexedDBの導入**
+   - 大容量データ向けのIndexedDBを実装（`idb-storage.js`）
+   - セッションデータをIndexedDBに保存
+   - localStorageからIndexedDBへの自動移行機能を追加
+
+3. **コード改善**
+   - 非同期処理（async/await）の導入
+   - フォールバック機構の実装によるブラウザ互換性の向上
+   - 不要なデータの重複保存を防止
+
+更新されたファイル：
+- `scripts/utils/storage.js`（IndexedDB対応）
+- `scripts/utils/idb-storage.js`（IndexedDB操作モジュール）
+- `scripts/modules/learning-mode.js`（画像最適化機能追加）
+- `scripts/api/face-generator.js`（IndexedDB対応とサイズ最適化）
+- `index.html`（スクリプト読み込み順序の修正）
+
+この更新により、より多くの顔画像を学習できるようになり、アプリケーションのパフォーマンスが向上しました。
+
 ## 機能概要
 
 このアプリケーションは以下の機能を提供します：
@@ -15,10 +54,12 @@
 
 ## 技術スタック
 
-- フロントエンド: HTML, CSS, JavaScript, React
+- フロントエンド: HTML, CSS, JavaScript
 - バックエンド: 不要（クライアントサイドのみで動作）
 - 外部API: This Person Does Not Exist API（AI生成顔画像）
-- データ保存: ローカルストレージ
+- データ保存: 
+  - 永続データ：localStorage（小規模データ）
+  - 大容量データ：IndexedDB（セッションや画像データ）
 
 ## 使い方
 
@@ -47,7 +88,7 @@ face-name-trainer/
 │   ├── app.js                # メインアプリケーション初期化
 │   ├── api/
 │   │   ├── face-api.js       # 顔画像取得用API連携
-│   │   ├── face-generator.js # 顔画像生成・管理モジュール（新規追加）
+│   │   ├── face-generator.js # 顔画像生成・管理モジュール（IndexedDB対応）
 │   │   └── name-api.js       # 名前データ取得API
 │   ├── components/
 │   │   ├── ui-manager.js     # UI表示・更新管理
@@ -60,18 +101,19 @@ face-name-trainer/
 │   │   ├── europe.js         # ヨーロッパの名前データ (予定)
 │   │   └── asia.js           # アジアの名前データ (予定)
 │   ├── utils/
-│   │   ├── storage.js        # ローカルストレージ操作
+│   │   ├── storage.js        # ストレージ操作（localStorage + IndexedDB連携）
+│   │   ├── idb-storage.js    # IndexedDB操作モジュール（新規追加）
 │   │   ├── timer.js          # タイマー機能
 │   │   └── helpers.js        # ユーティリティ関数
 │   ├── modules/
-│   │   ├── learning-mode.js  # 学習モードロジック
+│   │   ├── learning-mode.js  # 学習モードロジック（画像最適化機能追加）
 │   │   ├── test-mode.js      # テストモードロジック
 │   │   ├── stats.js          # 統計・進捗管理
 │   │   ├── difficulty.js     # 難易度設定管理
 │   │   └── spaced-rep.js     # 間隔反復システム (予定)
 │   └── events.js             # イベントリスナー管理
 ├── assets/                   # 静的アセット（アイコンなど）
-│   ├── face-data/            # 生成された顔画像データ保存ディレクトリ（新規追加）
+│   ├── face-data/            # 生成された顔画像データ保存ディレクトリ
 │   │   ├── japan/            # 日本人の顔画像
 │   │   ├── usa/              # アメリカ人の顔画像
 │   │   ├── europe/           # ヨーロッパ人の顔画像
@@ -87,9 +129,10 @@ face-name-trainer/
 
 1. `DOMContentLoaded` イベントで `App.init()` が呼び出される
 2. `App.init()` は必要なモジュールをロードし、初期化
-3. `FaceGenerator.init()` が呼ばれ、顔画像生成システムを初期化
-4. `EventManager.init()` がUIイベントリスナーを設定
-5. `EventManager.checkPreviousSession()` で前回のセッション状態を確認
+3. `IDBStorage.init()` でIndexedDBを初期化
+4. `FaceGenerator.init()` が呼ばれ、顔画像生成システムを初期化
+5. `EventManager.init()` がUIイベントリスナーを設定
+6. `EventManager.checkPreviousSession()` で前回のセッション状態を確認
 
 ### 2. 学習モードフロー
 
@@ -99,6 +142,7 @@ face-name-trainer/
 4. `LearningMode.start()` が以下の処理を実行：
    - `FaceGenerator.getRandomFaces()` で顔画像データを取得
    - `NameAPI.getRandomNames()` で名前データを取得
+   - 顔画像の最適化処理（256x256ピクセルにリサイズ）
    - 顔と名前のペアを作成し、画面に表示
    - タイマーを開始
 5. ユーザーが顔と名前を記憶
@@ -118,27 +162,30 @@ face-name-trainer/
 6. すべての問題が終了すると `TestMode.completeTest()` が呼ばれる
 7. 結果画面に遷移し、テスト結果の詳細が表示される
 
-### 4. 顔画像生成プロセス
+### 4. 顔画像生成と最適化プロセス
 
 1. 学習またはテスト開始時に `FaceGenerator` が呼び出される
 2. 選択された地域に応じて、`FaceGenerator.generateFacesForTest()` が実行
 3. 以下の特性に基づいて顔画像を生成：
    - 性別（男性：女性＝2：3）
    - 年齢（10代：20代：30代：40～50代：60代以上＝1：3：2：3：2）
-4. `assets/face-data/[region]/` に画像をキャッシュ
-5. 各地域の上限（200枚）に達した場合：
+4. 生成された画像はサイズ最適化処理
+   - 256x256ピクセルにリサイズ（アスペクト比維持）
+   - JPEG品質85%に設定
+5. `assets/face-data/[region]/` に画像をキャッシュ
+6. 各地域の上限（200枚）に達した場合：
    - テストに必要な人数の20%を新規生成
    - 同数の古い画像を削除
 
 ### 5. データの保存と管理
 
-1. 学習セッションデータは `Storage.saveSession()` で一時保存
-2. テスト結果は `Storage.saveTestResult()` で永続保存
-3. 統計データは `Storage.updateStats()` で更新
-4. 顔画像データは `FaceGenerator` によって管理・更新
+1. 学習セッションデータは `Storage.saveSession()` → `IDBStorage.save()` で保存（IndexedDB）
+2. テスト結果は `Storage.saveTestResult()` で永続保存（localStorage）
+3. 統計データは `Storage.updateStats()` で更新（localStorage）
+4. 顔画像データは `FaceGenerator` によってIndexedDBに保存・管理
+5. localStorageからIndexedDBへの自動移行機能を実装
 
 このフローにより、アプリケーションは効率的に顔画像の生成、表示、学習セッションの管理、テストの実施、結果の保存などの各機能を連携して実行します。
-
 
 ## カスタマイズ方法
 
@@ -148,6 +195,7 @@ face-name-trainer/
 - 学習時間やテスト方法のパラメータを変更
 - UIやデザインをカスタマイズ
 - `face-generator.js` の設定を変更して画像生成の条件をカスタマイズ
+- `learning-mode.js` の画像最適化設定を変更（サイズや品質）
 
 ## 学習科学に基づいた設計
 
