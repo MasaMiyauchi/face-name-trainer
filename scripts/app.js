@@ -9,7 +9,8 @@ const App = (function() {
     let appState = {
         initialized: false,
         version: '1.0.0',
-        supportedRegions: ['japan', 'usa', 'europe', 'asia']
+        supportedRegions: ['japan', 'usa', 'europe', 'asia'],
+        storageStatus: null
     };
     
     /**
@@ -27,19 +28,35 @@ const App = (function() {
             // 前提条件のチェック
             checkPrerequisites();
             
-            // 各モジュールの初期化
-            initializeModules();
-            
-            // イベントマネージャーの初期化（これにより他のイベントリスナーが設定される）
-            window.EventManager.init();
-            
-            // 前回のセッションをチェック
-            window.EventManager.checkPreviousSession();
-            
-            // 初期化完了
-            appState.initialized = true;
-            console.log('Application initialization complete');
-            
+            // ストレージ機能のテスト
+            testStorageCapabilities()
+                .then(storageStatus => {
+                    appState.storageStatus = storageStatus;
+                    console.log('Storage test results:', storageStatus);
+                    
+                    if (!storageStatus.localStorage) {
+                        console.error('LocalStorage is not available or working properly');
+                        window.Modal.error(
+                            'ローカルストレージが利用できません。一部の機能が正しく動作しない可能性があります。',
+                            'ストレージエラー'
+                        );
+                    }
+                    
+                    if (!storageStatus.indexedDB) {
+                        console.error('IndexedDB is not available or working properly');
+                        window.Modal.warn(
+                            'IndexedDBが利用できません。セッションデータが保持されない可能性があります。',
+                            'ストレージ警告'
+                        );
+                    }
+                })
+                .catch(error => {
+                    console.error('Storage test failed:', error);
+                })
+                .finally(() => {
+                    // 各モジュールの初期化（ストレージテスト結果に関わらず続行）
+                    continueInitialization();
+                });
         } catch (error) {
             console.error('Error initializing application:', error);
             
@@ -91,6 +108,101 @@ const App = (function() {
             console.error('Missing modules:', missingModules);
             throw new Error(`必要なモジュールが見つかりません: ${missingModules.join(', ')}`);
         }
+    }
+    
+    /**
+     * ストレージ機能のテスト
+     * @returns {Promise<Object>} ストレージテスト結果
+     */
+    async function testStorageCapabilities() {
+        // StorageTesterが利用可能かチェック
+        if (window.StorageTester && typeof window.StorageTester.testAll === 'function') {
+            try {
+                return await window.StorageTester.testAll();
+            } catch (error) {
+                console.error('Storage test error:', error);
+                return {
+                    localStorage: false,
+                    indexedDB: false,
+                    quota: 0,
+                    success: false,
+                    error: error.message,
+                    timestamp: new Date().toISOString()
+                };
+            }
+        } else {
+            // StorageTesterが利用できない場合は簡易テスト
+            console.warn('StorageTester not available, performing basic storage checks');
+            
+            // LocalStorageの簡易テスト
+            let localStorageAvailable = false;
+            try {
+                const testKey = '_test_ls_' + Date.now();
+                localStorage.setItem(testKey, 'test');
+                localStorage.removeItem(testKey);
+                localStorageAvailable = true;
+            } catch (e) {
+                localStorageAvailable = false;
+            }
+            
+            // IndexedDBの簡易チェック
+            const indexedDBAvailable = !!window.indexedDB;
+            
+            return {
+                localStorage: localStorageAvailable,
+                indexedDB: indexedDBAvailable,
+                quota: 0,
+                success: localStorageAvailable,
+                timestamp: new Date().toISOString()
+            };
+        }
+    }
+    
+    /**
+     * 初期化の続行（ストレージテスト後）
+     */
+    function continueInitialization() {
+        // 各モジュールの初期化
+        initializeModules();
+        
+        // イベントマネージャーの初期化（これにより他のイベントリスナーが設定される）
+        window.EventManager.init();
+        
+        // 前回のセッションをチェック
+        window.EventManager.checkPreviousSession();
+        
+        // 初期化完了
+        appState.initialized = true;
+        console.log('Application initialization complete');
+        
+        // 必要なディレクトリが存在するか確認
+        checkRequiredDirectories();
+    }
+    
+    /**
+     * 必要なディレクトリが存在するか確認
+     */
+    function checkRequiredDirectories() {
+        // すべての地域ディレクトリが存在するか確認
+        const regions = appState.supportedRegions;
+        
+        console.log('Checking required directories for regions:', regions);
+        
+        // 各地域のフォルダパスを構築
+        regions.forEach(region => {
+            const facePath = `assets/faces/${region}`;
+            
+            // 画像の存在をチェック
+            const testImage = new Image();
+            testImage.onerror = function() {
+                console.warn(`Directory check: No sample images found in ${facePath}`);
+                // ここではエラーとせず、警告だけ出す
+            };
+            testImage.onload = function() {
+                console.log(`Directory check: Sample image found in ${facePath}`);
+            };
+            testImage.src = `${facePath}/face1.jpg`;
+        });
     }
     
     /**
@@ -164,12 +276,21 @@ const App = (function() {
         return appState.initialized;
     }
     
+    /**
+     * ストレージのステータスを取得
+     * @returns {Object|null} - ストレージテスト結果
+     */
+    function getStorageStatus() {
+        return appState.storageStatus;
+    }
+    
     // 公開API
     return {
         init,
         getSupportedRegions,
         getVersion,
-        isInitialized
+        isInitialized,
+        getStorageStatus
     };
 })();
 
