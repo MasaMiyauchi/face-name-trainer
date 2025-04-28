@@ -20,6 +20,26 @@ const LearningMode = (function() {
     const MAX_IMAGE_WIDTH = 256;
     const MAX_IMAGE_HEIGHT = 256;
     
+    // デフォルト画像のパス
+    const DEFAULT_FACE_IMAGE = 'assets/default-face.jpg';
+    
+    // エラーリトライ設定
+    const MAX_RETRIES = 3;
+    
+    /**
+     * 画像の存在を確認する
+     * @param {string} imagePath - 画像のパス
+     * @returns {Promise<boolean>} - 画像が存在するかどうか
+     */
+    function checkImageExists(imagePath) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(true);
+            img.onerror = () => resolve(false);
+            img.src = imagePath;
+        });
+    }
+    
     /**
      * 学習モードを開始
      * @param {string} region - 地域識別子
@@ -44,6 +64,9 @@ const LearningMode = (function() {
         };
         
         try {
+            // 必要なディレクトリ構造を確認
+            await checkRequiredDirectories(region);
+            
             // まず先にFaceGeneratorを初期化
             if (window.FaceGenerator) {
                 await window.FaceGenerator.init();
@@ -78,6 +101,23 @@ const LearningMode = (function() {
             console.error('Error starting learning mode:', error);
             await window.Modal.error('学習モードの開始中にエラーが発生しました。');
             return Promise.reject(error);
+        }
+    }
+    
+    /**
+     * 必要なディレクトリ構造を確認する
+     * @param {string} region - 地域識別子
+     * @returns {Promise<void>}
+     */
+    async function checkRequiredDirectories(region) {
+        const facePath = `assets/faces/${region}`;
+        
+        // テスト用の画像が存在するか確認
+        const imageExists = await checkImageExists(`${facePath}/face1.jpg`);
+        
+        if (!imageExists) {
+            console.warn(`Warning: No sample images found in ${facePath}`);
+            // ディレクトリは存在するが中身がないかもしれないので警告だけ出す
         }
     }
     
@@ -119,48 +159,72 @@ const LearningMode = (function() {
      */
     function optimizeImageSize(imageDataUrl) {
         return new Promise((resolve, reject) => {
+            // 入力チェック
+            if (!imageDataUrl || typeof imageDataUrl !== 'string') {
+                console.error('Invalid image data URL:', imageDataUrl);
+                resolve(DEFAULT_FACE_IMAGE);
+                return;
+            }
+            
             // 画像を生成
             const img = new Image();
             
+            // タイムアウト処理
+            const timeout = setTimeout(() => {
+                console.warn('Image loading timeout, using default image');
+                resolve(DEFAULT_FACE_IMAGE);
+            }, 5000);
+            
             img.onload = function() {
-                // 元のサイズを取得
-                const originalWidth = img.width;
-                const originalHeight = img.height;
+                clearTimeout(timeout);
                 
-                // サイズが既に制限内なら変更しない
-                if (originalWidth <= MAX_IMAGE_WIDTH && originalHeight <= MAX_IMAGE_HEIGHT) {
-                    resolve(imageDataUrl);
-                    return;
+                try {
+                    // 元のサイズを取得
+                    const originalWidth = img.width;
+                    const originalHeight = img.height;
+                    
+                    // サイズが既に制限内なら変更しない
+                    if (originalWidth <= MAX_IMAGE_WIDTH && originalHeight <= MAX_IMAGE_HEIGHT) {
+                        resolve(imageDataUrl);
+                        return;
+                    }
+                    
+                    // 新しいサイズを計算（アスペクト比を維持）
+                    let newWidth, newHeight;
+                    
+                    if (originalWidth > originalHeight) {
+                        newWidth = MAX_IMAGE_WIDTH;
+                        newHeight = Math.floor(originalHeight * (MAX_IMAGE_WIDTH / originalWidth));
+                    } else {
+                        newHeight = MAX_IMAGE_HEIGHT;
+                        newWidth = Math.floor(originalWidth * (MAX_IMAGE_HEIGHT / originalHeight));
+                    }
+                    
+                    // キャンバスを作成
+                    const canvas = document.createElement('canvas');
+                    canvas.width = newWidth;
+                    canvas.height = newHeight;
+                    
+                    // 画像を描画
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                    
+                    // 最適化された画像のデータURLを取得
+                    const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85); // 品質を下げる
+                    
+                    resolve(optimizedDataUrl);
+                } catch (error) {
+                    console.error('Error optimizing image:', error);
+                    // エラー時はデフォルト画像を返す
+                    resolve(DEFAULT_FACE_IMAGE);
                 }
-                
-                // 新しいサイズを計算（アスペクト比を維持）
-                let newWidth, newHeight;
-                
-                if (originalWidth > originalHeight) {
-                    newWidth = MAX_IMAGE_WIDTH;
-                    newHeight = Math.floor(originalHeight * (MAX_IMAGE_WIDTH / originalWidth));
-                } else {
-                    newHeight = MAX_IMAGE_HEIGHT;
-                    newWidth = Math.floor(originalWidth * (MAX_IMAGE_HEIGHT / originalHeight));
-                }
-                
-                // キャンバスを作成
-                const canvas = document.createElement('canvas');
-                canvas.width = newWidth;
-                canvas.height = newHeight;
-                
-                // 画像を描画
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, newWidth, newHeight);
-                
-                // 最適化された画像のデータURLを取得
-                const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85); // 品質を下げる
-                
-                resolve(optimizedDataUrl);
             };
             
             img.onerror = function() {
-                reject(new Error('画像の最適化に失敗しました'));
+                clearTimeout(timeout);
+                console.error('Failed to load image for optimization');
+                // エラー時はデフォルト画像を返す
+                resolve(DEFAULT_FACE_IMAGE);
             };
             
             img.src = imageDataUrl;
@@ -210,20 +274,31 @@ const LearningMode = (function() {
             sessionState.facesAndNames = [];
             
             for (let i = 0; i < count; i++) {
-                const name = names[i];
+                const name = names[i] || createFallbackName(region, i);
                 const face = faces[i] || null;
                 
                 let faceUrl;
-                if (face && face.imageData) {
-                    // FaceGenerator形式のデータ
-                    // 画像サイズを最適化
-                    faceUrl = await optimizeImageSize(face.imageData);
-                } else if (face) {
-                    // 直接URLの場合
-                    faceUrl = face;
-                } else {
-                    // データがない場合はデフォルト
-                    faceUrl = 'assets/default-face.jpg';
+                try {
+                    if (face && face.imageData) {
+                        // FaceGenerator形式のデータ
+                        // 画像サイズを最適化
+                        faceUrl = await optimizeImageSize(face.imageData);
+                    } else if (face) {
+                        // 直接URLの場合
+                        faceUrl = await optimizeImageSize(face);
+                    } else {
+                        // データがない場合はデフォルト
+                        faceUrl = DEFAULT_FACE_IMAGE;
+                    }
+                    
+                    // 最終チェック
+                    if (!faceUrl || faceUrl === 'undefined' || faceUrl === 'null') {
+                        console.warn('Invalid face URL, using default');
+                        faceUrl = DEFAULT_FACE_IMAGE;
+                    }
+                } catch (error) {
+                    console.error('Error processing face:', error);
+                    faceUrl = DEFAULT_FACE_IMAGE;
                 }
                 
                 sessionState.facesAndNames.push({
@@ -247,6 +322,33 @@ const LearningMode = (function() {
     }
     
     /**
+     * フォールバック用の名前データを作成
+     * @param {string} region - 地域識別子
+     * @param {number} index - インデックス
+     * @returns {Object} - 名前オブジェクト
+     */
+    function createFallbackName(region, index) {
+        // 地域ごとにデフォルト名を用意
+        const defaultNames = {
+            'japan': { firstName: '太郎', lastName: '田中' },
+            'usa': { firstName: 'John', lastName: 'Smith' },
+            'europe': { firstName: 'Hans', lastName: 'Mueller' },
+            'asia': { firstName: 'Li', lastName: 'Wang' }
+        };
+        
+        // 該当する地域のデフォルト名、または汎用名を返す
+        const name = defaultNames[region] || { firstName: 'User', lastName: `${index + 1}` };
+        
+        return {
+            id: `default-${region}-${index}`,
+            firstName: name.firstName,
+            lastName: name.lastName,
+            gender: index % 2 === 0 ? 'male' : 'female',
+            age: 25 + (index % 40)
+        };
+    }
+    
+    /**
      * 従来のFaceAPIを使用して顔画像をロード（フォールバック）
      * @param {string} region - 地域識別子
      * @param {number} count - ロードする顔の数
@@ -254,18 +356,71 @@ const LearningMode = (function() {
      */
     async function fallbackLoadFaces(region, count) {
         const faces = [];
+        let errors = 0;
         
         for (let i = 0; i < count; i++) {
             try {
-                const faceUrl = await window.FaceAPI.getFace(region);
+                // 最大試行回数を設定
+                let retriesLeft = MAX_RETRIES;
+                let success = false;
+                let faceUrl = null;
                 
-                // 画像サイズを最適化
+                // リトライループ
+                while (retriesLeft > 0 && !success) {
+                    try {
+                        // APIから顔画像を取得
+                        faceUrl = await window.FaceAPI.getFace(region);
+                        
+                        // フォールバック用のローカル画像チェック
+                        if (!faceUrl || faceUrl.includes('undefined') || faceUrl.includes('null')) {
+                            // ローカルダミー画像のパスを構築
+                            const dummyIndex = (i % 5) + 1; // 1-5の範囲
+                            const localPath = `assets/faces/${region}/face${dummyIndex}.jpg`;
+                            
+                            // 画像の存在を確認
+                            const exists = await checkImageExists(localPath);
+                            if (exists) {
+                                faceUrl = localPath;
+                                success = true;
+                            } else {
+                                throw new Error(`Local dummy image not found: ${localPath}`);
+                            }
+                        } else {
+                            success = true;
+                        }
+                    } catch (error) {
+                        retriesLeft--;
+                        console.warn(`Retry left ${retriesLeft} for face ${i}:`, error);
+                        // リトライ前に少し待機
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+                
+                if (!success) {
+                    throw new Error(`Failed to load face image after ${MAX_RETRIES} retries`);
+                }
+                
+                // 画像サイズを最適化（最適化プロセスがエラーになってもデフォルト画像が返るようになっている）
                 const optimizedUrl = await optimizeImageSize(faceUrl);
                 faces.push(optimizedUrl);
             } catch (error) {
                 console.error('Error loading face image:', error);
+                errors++;
+                
                 // エラー時はダミー画像を使用
-                faces.push('assets/default-face.jpg');
+                // 地域ごとのダミー画像をインデックスによって変える
+                const dummyIndex = (i % 5) + 1; // 1-5の範囲で循環
+                const fallbackPath = `assets/faces/${region}/face${dummyIndex}.jpg`;
+                
+                // 存在チェック
+                const fallbackExists = await checkImageExists(fallbackPath);
+                
+                if (fallbackExists) {
+                    faces.push(fallbackPath);
+                } else {
+                    // 最終フォールバック
+                    faces.push(DEFAULT_FACE_IMAGE);
+                }
             }
             
             // ロード進捗を更新
@@ -273,6 +428,11 @@ const LearningMode = (function() {
                 const progress = Math.round((i + 1) / count * 100);
                 window.Modal.updateMessage(`顔と名前のデータをロードしています... ${progress}%`);
             }
+        }
+        
+        // エラーが多すぎる場合は警告
+        if (errors > count / 2) {
+            console.warn(`Warning: High error rate (${errors}/${count}) loading faces`);
         }
         
         return faces;
@@ -303,6 +463,15 @@ const LearningMode = (function() {
         // 顔画像を更新
         const faceImageElement = document.getElementById('face-image');
         if (faceImageElement) {
+            // 画像のエラーハンドリングを追加
+            faceImageElement.onerror = function() {
+                console.error(`Error loading image: ${currentPair.faceUrl}`);
+                // デフォルト画像にフォールバック
+                if (faceImageElement.src !== DEFAULT_FACE_IMAGE) {
+                    faceImageElement.src = DEFAULT_FACE_IMAGE;
+                }
+            };
+            
             faceImageElement.src = currentPair.faceUrl;
         }
         
@@ -515,12 +684,15 @@ const LearningMode = (function() {
                 region: savedSession.region,
                 difficulty: savedSession.difficulty,
                 currentIndex: savedSession.currentIndex,
-                facesAndNames: savedSession.facesAndNames,
+                facesAndNames: savedSession.facesAndNames || [],
                 timePerFace: savedSession.timePerFace || 10,
                 isActive: true,
                 stopTimer: null,
                 isCompleted: false
             };
+            
+            // 復元したデータを検証
+            validateRestoredSession();
             
             // UI要素を更新
             updateUI();
@@ -535,6 +707,58 @@ const LearningMode = (function() {
         } catch (error) {
             console.error('セッションの復元に失敗しました:', error);
             return false;
+        }
+    }
+    
+    /**
+     * 復元したセッションデータを検証
+     */
+    function validateRestoredSession() {
+        // 検証に失敗した場合は初期値を設定
+        if (!sessionState.region || !sessionState.difficulty) {
+            sessionState.region = 'japan';
+            sessionState.difficulty = 5;
+        }
+        
+        // facesAndNamesの検証
+        if (!Array.isArray(sessionState.facesAndNames) || sessionState.facesAndNames.length === 0) {
+            sessionState.facesAndNames = [];
+            // 空の場合は新しいセッションを開始する必要がある
+            console.warn('Restored session has no face data, a new session should be started');
+        } else {
+            // 各顔データを検証
+            sessionState.facesAndNames = sessionState.facesAndNames.map((pair, index) => {
+                // 最低限の必須フィールドを持つか確認
+                if (!pair || !pair.name) {
+                    // 不正なデータの場合はフォールバック
+                    return {
+                        id: `restored-${index}`,
+                        name: createFallbackName(sessionState.region, index),
+                        faceUrl: DEFAULT_FACE_IMAGE,
+                        region: sessionState.region,
+                        faceData: null
+                    };
+                }
+                
+                // 画像URLの検証
+                if (!pair.faceUrl || typeof pair.faceUrl !== 'string') {
+                    pair.faceUrl = DEFAULT_FACE_IMAGE;
+                }
+                
+                return pair;
+            });
+        }
+        
+        // currentIndexの検証
+        if (typeof sessionState.currentIndex !== 'number' || 
+            sessionState.currentIndex < 0 || 
+            sessionState.currentIndex >= sessionState.facesAndNames.length) {
+            sessionState.currentIndex = 0;
+        }
+        
+        // timePerFaceの検証
+        if (typeof sessionState.timePerFace !== 'number' || sessionState.timePerFace <= 0) {
+            sessionState.timePerFace = 10;
         }
     }
     
