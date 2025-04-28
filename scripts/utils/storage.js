@@ -207,26 +207,64 @@ const Storage = (function() {
     /**
      * トレーニングセッションデータを保存（学習モードでの中断用）
      * @param {Object} sessionData - セッションデータ
-     * @returns {boolean} - 保存が成功したかどうか
+     * @returns {Promise<boolean>} - 保存が成功したかどうかを返すPromise
      */
     function saveSession(sessionData) {
-        return save(KEYS.TRAINING_SESSION, sessionData);
+        // セッションデータはサイズが大きくなる可能性があるため、IndexedDBを使用
+        return window.IDBStorage.save(KEYS.TRAINING_SESSION, sessionData);
     }
     
     /**
      * トレーニングセッションデータを取得
-     * @returns {Object|null} - セッションデータまたはnull
+     * @returns {Promise<Object|null>} - セッションデータまたはnullを返すPromise
      */
-    function getSession() {
-        return load(KEYS.TRAINING_SESSION, null);
+    async function getSession() {
+        try {
+            // まずIndexedDBから取得を試みる
+            const sessionData = await window.IDBStorage.load(KEYS.TRAINING_SESSION, null);
+            return sessionData;
+        } catch (error) {
+            console.error('Error loading session from IndexedDB:', error);
+            
+            // フォールバックとしてlocalStorageを確認
+            const legacySession = load(KEYS.TRAINING_SESSION, null);
+            if (legacySession) {
+                console.log('Loaded session data from localStorage (legacy storage)');
+                
+                // 見つかったlocalStorageのデータをIndexedDBに移行
+                try {
+                    await window.IDBStorage.save(KEYS.TRAINING_SESSION, legacySession);
+                    // 移行後にlocalStorageからは削除
+                    remove(KEYS.TRAINING_SESSION);
+                    console.log('Migrated session data from localStorage to IndexedDB');
+                } catch (migrateError) {
+                    console.error('Failed to migrate session data to IndexedDB:', migrateError);
+                }
+                
+                return legacySession;
+            }
+            
+            return null;
+        }
     }
     
     /**
      * トレーニングセッションデータを削除
-     * @returns {boolean} - 削除が成功したかどうか
+     * @returns {Promise<boolean>} - 削除が成功したかどうかを返すPromise
      */
-    function clearSession() {
-        return remove(KEYS.TRAINING_SESSION);
+    async function clearSession() {
+        try {
+            // IndexedDBからの削除を試みる
+            await window.IDBStorage.remove(KEYS.TRAINING_SESSION);
+            
+            // フォールバックとしてlocalStorageからも削除
+            remove(KEYS.TRAINING_SESSION);
+            
+            return true;
+        } catch (error) {
+            console.error('Error clearing session data:', error);
+            return false;
+        }
     }
     
     // 公開API
