@@ -239,7 +239,9 @@
     <!-- ユーティリティ -->
     <script src="scripts/utils/timer.js"></script>
     <script src="scripts/utils/helpers.js"></script>
-    <!-- IndexedDBを先に読み込む（Storageの依存関係） -->
+    <!-- ストレージテスターを先に読み込む -->
+    <script src="scripts/utils/storage-tester.js"></script>
+    <!-- IndexedDBを次に読み込む（Storageの依存関係） -->
     <script src="scripts/utils/idb-storage.js"></script>
     <script src="scripts/utils/storage.js"></script>
     
