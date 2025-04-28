@@ -29,6 +29,10 @@ const FaceGenerator = (function() {
       europe: 'assets/face-data/europe/',
       asia: 'assets/face-data/asia/'
   };
+
+  // 画像サイズの制限（ピクセル）
+  const MAX_IMAGE_WIDTH = 256;
+  const MAX_IMAGE_HEIGHT = 256;
   
   // キャッシュされた画像データ（地域ごと）
   let faceCache = {
@@ -117,23 +121,100 @@ const FaceGenerator = (function() {
    * @returns {Promise<Array>} - 顔データの配列
    */
   async function loadFacesForRegion(region) {
-      // ストレージから顔データのメタデータを取得する
-      const storagePath = STORAGE_PATHS[region];
-      
-      // LocalStorageからメタデータを取得する実装
-      const storageKey = `face-data-${region}`;
-      const storedData = localStorage.getItem(storageKey);
-      
-      if (storedData) {
-          try {
-              return JSON.parse(storedData);
-          } catch (e) {
-              console.error(`Error parsing stored face data for ${region}:`, e);
-              return [];
+      // IDBStorageを使用してメタデータを取得する
+      try {
+          await window.IDBStorage.init();
+          const storageKey = `face-data-${region}`;
+          const storedData = await window.IDBStorage.load(storageKey, null);
+          
+          if (storedData) {
+              return storedData;
+          }
+          
+          // IDBStorageにデータがない場合はLocalStorageをチェック（移行のため）
+          const legacyData = localStorage.getItem(storageKey);
+          if (legacyData) {
+              try {
+                  const parsedData = JSON.parse(legacyData);
+                  // データをIDBStorageに移行
+                  await window.IDBStorage.save(storageKey, parsedData);
+                  console.log(`Migrated face data for ${region} to IndexedDB`);
+                  return parsedData;
+              } catch (e) {
+                  console.error(`Error parsing stored face data for ${region}:`, e);
+              }
+          }
+      } catch (error) {
+          console.error(`Error loading face data for ${region} from IndexedDB:`, error);
+          
+          // フォールバックとしてLocalStorageを試す
+          const storedData = localStorage.getItem(`face-data-${region}`);
+          
+          if (storedData) {
+              try {
+                  return JSON.parse(storedData);
+              } catch (e) {
+                  console.error(`Error parsing stored face data for ${region}:`, e);
+              }
           }
       }
       
       return [];
+  }
+
+  /**
+   * 画像のサイズを最適化する
+   * @param {string} imageDataUrl - 画像のデータURL
+   * @returns {Promise<string>} - 最適化された画像のデータURL
+   */
+  function optimizeImageSize(imageDataUrl) {
+      return new Promise((resolve, reject) => {
+          // 画像を生成
+          const img = new Image();
+          
+          img.onload = function() {
+              // 元のサイズを取得
+              const originalWidth = img.width;
+              const originalHeight = img.height;
+              
+              // サイズが既に制限内なら変更しない
+              if (originalWidth <= MAX_IMAGE_WIDTH && originalHeight <= MAX_IMAGE_HEIGHT) {
+                  resolve(imageDataUrl);
+                  return;
+              }
+              
+              // 新しいサイズを計算（アスペクト比を維持）
+              let newWidth, newHeight;
+              
+              if (originalWidth > originalHeight) {
+                  newWidth = MAX_IMAGE_WIDTH;
+                  newHeight = Math.floor(originalHeight * (MAX_IMAGE_WIDTH / originalWidth));
+              } else {
+                  newHeight = MAX_IMAGE_HEIGHT;
+                  newWidth = Math.floor(originalWidth * (MAX_IMAGE_HEIGHT / originalHeight));
+              }
+              
+              // キャンバスを作成
+              const canvas = document.createElement('canvas');
+              canvas.width = newWidth;
+              canvas.height = newHeight;
+              
+              // 画像を描画
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, newWidth, newHeight);
+              
+              // 最適化された画像のデータURLを取得
+              const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85); // 品質を下げる
+              
+              resolve(optimizedDataUrl);
+          };
+          
+          img.onerror = function() {
+              reject(new Error('画像の最適化に失敗しました'));
+          };
+          
+          img.src = imageDataUrl;
+      });
   }
   
   /**
@@ -248,15 +329,21 @@ const FaceGenerator = (function() {
           // FaceAPIを使って実際の画像を取得
           const imageDataUrl = await window.FaceAPI.getFace(region);
           
+          // 画像サイズを最適化
+          const optimizedImageUrl = await optimizeImageSize(imageDataUrl);
+          
           // ファイルパスを設定
           const fileName = `${metadata.id}.jpg`;
           const filePath = `${STORAGE_PATHS[region]}${fileName}`;
           metadata.filePath = filePath;
           
-          // 実際の保存はブラウザ環境では制限があるため、LocalStorageにメタデータのみ保存
-          saveFaceData(metadata, imageDataUrl);
+          // 実際の保存はブラウザ環境では制限があるため、IndexedDBにメタデータとイメージデータを保存
+          await saveFaceData(metadata, optimizedImageUrl);
           
-          return metadata;
+          return {
+              ...metadata,
+              imageData: optimizedImageUrl
+          };
       } catch (error) {
           console.error('Error generating face:', error);
           throw new Error(`Failed to generate face: ${error.message}`);
@@ -267,34 +354,51 @@ const FaceGenerator = (function() {
    * 顔データを保存する
    * @param {Object} metadata - 顔のメタデータ
    * @param {string} imageDataUrl - 画像のデータURL
+   * @returns {Promise<void>}
    */
-  function saveFaceData(metadata, imageDataUrl) {
+  async function saveFaceData(metadata, imageDataUrl) {
       // キャッシュに追加
       faceCache[metadata.region].push(metadata);
       
-      // LocalStorageにメタデータを保存
-      const storageKey = `face-data-${metadata.region}`;
-      localStorage.setItem(storageKey, JSON.stringify(faceCache[metadata.region]));
-      
-      // 画像データも保存（実際の実装ではサーバーにアップロード）
-      const imageKey = `face-image-${metadata.id}`;
       try {
-          localStorage.setItem(imageKey, imageDataUrl);
-      } catch (e) {
-          // LocalStorageの容量制限に達した場合の処理
-          console.warn('LocalStorage capacity exceeded. Unable to save image data.');
-          // 最も古い画像を削除して容量を確保
-          removeOldestImage(metadata.region);
-          // 再試行
-          localStorage.setItem(imageKey, imageDataUrl);
+          // IndexedDBにメタデータを保存
+          await window.IDBStorage.init();
+          const metadataKey = `face-data-${metadata.region}`;
+          await window.IDBStorage.save(metadataKey, faceCache[metadata.region]);
+          
+          // 画像データも保存
+          const imageKey = `face-image-${metadata.id}`;
+          await window.IDBStorage.save(imageKey, imageDataUrl);
+          
+          console.log(`Face data saved for ${metadata.id}`);
+      } catch (error) {
+          console.error('Error saving to IndexedDB:', error);
+          
+          // フォールバックとしてLocalStorageに保存を試みる
+          try {
+              // LocalStorageにメタデータを保存
+              localStorage.setItem(`face-data-${metadata.region}`, JSON.stringify(faceCache[metadata.region]));
+              
+              // 画像データも保存
+              localStorage.setItem(`face-image-${metadata.id}`, imageDataUrl);
+          } catch (lsError) {
+              // LocalStorageの容量制限に達した場合の処理
+              console.warn('LocalStorage capacity exceeded. Unable to save image data.', lsError);
+              // 最も古い画像を削除して容量を確保
+              removeOldestImage(metadata.region);
+              // 再試行
+              localStorage.setItem(`face-data-${metadata.region}`, JSON.stringify(faceCache[metadata.region]));
+              localStorage.setItem(`face-image-${metadata.id}`, imageDataUrl);
+          }
       }
   }
   
   /**
    * 最も古い画像を削除する
    * @param {string} region - 地域識別子
+   * @returns {Promise<void>}
    */
-  function removeOldestImage(region) {
+  async function removeOldestImage(region) {
       if (faceCache[region].length === 0) {
           return;
       }
@@ -305,12 +409,19 @@ const FaceGenerator = (function() {
       // 最も古い画像を削除
       const oldestFace = faceCache[region].shift();
       
-      // LocalStorageから画像データを削除
-      localStorage.removeItem(`face-image-${oldestFace.id}`);
-      
-      // メタデータも更新
-      const storageKey = `face-data-${region}`;
-      localStorage.setItem(storageKey, JSON.stringify(faceCache[region]));
+      try {
+          // IndexedDBから画像データを削除
+          await window.IDBStorage.remove(`face-image-${oldestFace.id}`);
+          
+          // メタデータも更新
+          await window.IDBStorage.save(`face-data-${region}`, faceCache[region]);
+      } catch (error) {
+          console.error('Error removing oldest image from IndexedDB:', error);
+          
+          // フォールバックとしてLocalStorageから削除
+          localStorage.removeItem(`face-image-${oldestFace.id}`);
+          localStorage.setItem(`face-data-${region}`, JSON.stringify(faceCache[region]));
+      }
       
       console.log(`Removed oldest image for ${region}: ${oldestFace.id}`);
   }
@@ -352,7 +463,7 @@ const FaceGenerator = (function() {
           
           // 同数の古い顔を削除
           for (let i = 0; i < newFacesCount; i++) {
-              removeOldestImage(region);
+              await removeOldestImage(region);
           }
           
           return newFaces;
@@ -370,11 +481,26 @@ const FaceGenerator = (function() {
   /**
    * 顔画像データを取得
    * @param {string} faceId - 顔ID
-   * @returns {string|null} - 画像のデータURL
+   * @returns {Promise<string|null>} - 画像のデータURL
    */
-  function getFaceImage(faceId) {
-      const imageKey = `face-image-${faceId}`;
-      return localStorage.getItem(imageKey);
+  async function getFaceImage(faceId) {
+      try {
+          // IndexedDBから画像を取得
+          await window.IDBStorage.init();
+          const imageKey = `face-image-${faceId}`;
+          const imageData = await window.IDBStorage.load(imageKey, null);
+          
+          if (imageData) {
+              return imageData;
+          }
+          
+          // IndexedDBにない場合はLocalStorageを確認
+          return localStorage.getItem(imageKey);
+      } catch (error) {
+          console.error('Error fetching face image from IndexedDB:', error);
+          // フォールバックとしてLocalStorageから取得
+          return localStorage.getItem(`face-image-${faceId}`);
+      }
   }
   
   /**
@@ -407,7 +533,7 @@ const FaceGenerator = (function() {
       // 画像データを添付
       const results = [];
       for (const face of selected) {
-          const imageData = getFaceImage(face.id);
+          const imageData = await getFaceImage(face.id);
           results.push({
               ...face,
               imageData
@@ -420,27 +546,47 @@ const FaceGenerator = (function() {
   /**
    * 特定の地域の顔データをすべて削除
    * @param {string} region - 地域識別子
+   * @returns {Promise<void>}
    */
-  function clearRegionData(region) {
-      // キャッシュされた顔データをループして削除
-      const faces = faceCache[region] || [];
-      for (const face of faces) {
-          localStorage.removeItem(`face-image-${face.id}`);
+  async function clearRegionData(region) {
+      try {
+          // キャッシュされた顔データをループして削除
+          const faces = faceCache[region] || [];
+          
+          await window.IDBStorage.init();
+          
+          for (const face of faces) {
+              await window.IDBStorage.remove(`face-image-${face.id}`);
+              localStorage.removeItem(`face-image-${face.id}`);
+          }
+          
+          // メタデータもクリア
+          faceCache[region] = [];
+          await window.IDBStorage.remove(`face-data-${region}`);
+          localStorage.removeItem(`face-data-${region}`);
+          
+          console.log(`Cleared all face data for region: ${region}`);
+      } catch (error) {
+          console.error(`Error clearing region data for ${region}:`, error);
+          
+          // フォールバックとしてLocalStorageの削除を試みる
+          const faces = faceCache[region] || [];
+          for (const face of faces) {
+              localStorage.removeItem(`face-image-${face.id}`);
+          }
+          
+          faceCache[region] = [];
+          localStorage.removeItem(`face-data-${region}`);
       }
-      
-      // メタデータもクリア
-      faceCache[region] = [];
-      localStorage.removeItem(`face-data-${region}`);
-      
-      console.log(`Cleared all face data for region: ${region}`);
   }
   
   /**
    * すべての顔データを削除
+   * @returns {Promise<void>}
    */
-  function clearAllData() {
+  async function clearAllData() {
       for (const region in STORAGE_PATHS) {
-          clearRegionData(region);
+          await clearRegionData(region);
       }
       console.log('Cleared all face data');
   }
