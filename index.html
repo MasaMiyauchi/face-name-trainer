@@ -237,9 +237,11 @@
     <script src="scripts/components/navigation.js"></script>
     
     <!-- ユーティリティ -->
-    <script src="scripts/utils/storage.js"></script>
     <script src="scripts/utils/timer.js"></script>
     <script src="scripts/utils/helpers.js"></script>
+    <!-- IndexedDBを先に読み込む（Storageの依存関係） -->
+    <script src="scripts/utils/idb-storage.js"></script>
+    <script src="scripts/utils/storage.js"></script>
     
     <!-- API -->
     <script src="scripts/api/face-api.js"></script>
