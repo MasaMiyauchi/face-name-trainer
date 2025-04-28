@@ -16,6 +16,10 @@ const LearningMode = (function() {
         isCompleted: false     // 学習が完了したかどうか
     };
     
+    // 画像サイズの制限（ピクセル）
+    const MAX_IMAGE_WIDTH = 256;
+    const MAX_IMAGE_HEIGHT = 256;
+    
     /**
      * 学習モードを開始
      * @param {string} region - 地域識別子
@@ -57,8 +61,8 @@ const LearningMode = (function() {
             // タイマーを開始
             startFaceTimer();
             
-            // 学習セッションデータをローカルストレージに保存
-            saveSession();
+            // 学習セッションデータをIndexedDBに保存
+            await saveSession();
             
             // 完了時に解決するPromiseを返す
             return new Promise((resolve) => {
@@ -109,6 +113,61 @@ const LearningMode = (function() {
     }
     
     /**
+     * 画像のサイズを最適化する
+     * @param {string} imageDataUrl - 画像のデータURL
+     * @returns {Promise<string>} - 最適化された画像のデータURL
+     */
+    function optimizeImageSize(imageDataUrl) {
+        return new Promise((resolve, reject) => {
+            // 画像を生成
+            const img = new Image();
+            
+            img.onload = function() {
+                // 元のサイズを取得
+                const originalWidth = img.width;
+                const originalHeight = img.height;
+                
+                // サイズが既に制限内なら変更しない
+                if (originalWidth <= MAX_IMAGE_WIDTH && originalHeight <= MAX_IMAGE_HEIGHT) {
+                    resolve(imageDataUrl);
+                    return;
+                }
+                
+                // 新しいサイズを計算（アスペクト比を維持）
+                let newWidth, newHeight;
+                
+                if (originalWidth > originalHeight) {
+                    newWidth = MAX_IMAGE_WIDTH;
+                    newHeight = Math.floor(originalHeight * (MAX_IMAGE_WIDTH / originalWidth));
+                } else {
+                    newHeight = MAX_IMAGE_HEIGHT;
+                    newWidth = Math.floor(originalWidth * (MAX_IMAGE_HEIGHT / originalHeight));
+                }
+                
+                // キャンバスを作成
+                const canvas = document.createElement('canvas');
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                
+                // 画像を描画
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                
+                // 最適化された画像のデータURLを取得
+                const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85); // 品質を下げる
+                
+                resolve(optimizedDataUrl);
+            };
+            
+            img.onerror = function() {
+                reject(new Error('画像の最適化に失敗しました'));
+            };
+            
+            img.src = imageDataUrl;
+        });
+    }
+    
+    /**
      * 顔と名前のペアをロード
      * @param {string} region - 地域識別子
      * @param {number} count - ロードする顔の数
@@ -149,6 +208,7 @@ const LearningMode = (function() {
             
             // 顔と名前のペアを作成
             sessionState.facesAndNames = [];
+            
             for (let i = 0; i < count; i++) {
                 const name = names[i];
                 const face = faces[i] || null;
@@ -156,7 +216,8 @@ const LearningMode = (function() {
                 let faceUrl;
                 if (face && face.imageData) {
                     // FaceGenerator形式のデータ
-                    faceUrl = face.imageData;
+                    // 画像サイズを最適化
+                    faceUrl = await optimizeImageSize(face.imageData);
                 } else if (face) {
                     // 直接URLの場合
                     faceUrl = face;
@@ -170,7 +231,7 @@ const LearningMode = (function() {
                     name: name,
                     faceUrl: faceUrl,
                     region: region,
-                    faceData: face // 生成器から取得した元データも保持
+                    faceData: face ? { ...face, imageData: null } : null // 生成器から取得した元データは保持するが画像データは取り除く
                 });
             }
             
@@ -197,7 +258,10 @@ const LearningMode = (function() {
         for (let i = 0; i < count; i++) {
             try {
                 const faceUrl = await window.FaceAPI.getFace(region);
-                faces.push(faceUrl);
+                
+                // 画像サイズを最適化
+                const optimizedUrl = await optimizeImageSize(faceUrl);
+                faces.push(optimizedUrl);
             } catch (error) {
                 console.error('Error loading face image:', error);
                 // エラー時はダミー画像を使用
@@ -405,15 +469,21 @@ const LearningMode = (function() {
     /**
      * 現在のセッション状態を保存
      */
-    function saveSession() {
+    async function saveSession() {
         if (sessionState.isActive) {
-            window.Storage.saveSession({
-                region: sessionState.region,
-                difficulty: sessionState.difficulty,
-                currentIndex: sessionState.currentIndex,
-                facesAndNames: sessionState.facesAndNames,
-                timePerFace: sessionState.timePerFace
-            });
+            try {
+                // セッションデータをIndexedDBに保存
+                await window.Storage.saveSession({
+                    region: sessionState.region,
+                    difficulty: sessionState.difficulty,
+                    currentIndex: sessionState.currentIndex,
+                    facesAndNames: sessionState.facesAndNames,
+                    timePerFace: sessionState.timePerFace
+                });
+                console.log('セッションデータを保存しました');
+            } catch (error) {
+                console.error('セッションデータの保存に失敗しました:', error);
+            }
         }
     }
     
@@ -422,45 +492,50 @@ const LearningMode = (function() {
      * @returns {Promise<boolean>} - セッションが復元されたかどうか
      */
     async function restoreSession() {
-        const savedSession = window.Storage.getSession();
-        
-        if (!savedSession) {
+        try {
+            const savedSession = await window.Storage.getSession();
+            
+            if (!savedSession) {
+                return false;
+            }
+            
+            // 復元するか確認
+            const confirmed = await window.Modal.confirm(
+                '前回の学習セッションを再開しますか？',
+                'セッション復元'
+            );
+            
+            if (!confirmed) {
+                await window.Storage.clearSession();
+                return false;
+            }
+            
+            // セッション状態を復元
+            sessionState = {
+                region: savedSession.region,
+                difficulty: savedSession.difficulty,
+                currentIndex: savedSession.currentIndex,
+                facesAndNames: savedSession.facesAndNames,
+                timePerFace: savedSession.timePerFace || 10,
+                isActive: true,
+                stopTimer: null,
+                isCompleted: false
+            };
+            
+            // UI要素を更新
+            updateUI();
+            
+            // セクションを表示
+            window.UIManager.showSection('learning-screen');
+            
+            // タイマーを開始
+            startFaceTimer();
+            
+            return true;
+        } catch (error) {
+            console.error('セッションの復元に失敗しました:', error);
             return false;
         }
-        
-        // 復元するか確認
-        const confirmed = await window.Modal.confirm(
-            '前回の学習セッションを再開しますか？',
-            'セッション復元'
-        );
-        
-        if (!confirmed) {
-            window.Storage.clearSession();
-            return false;
-        }
-        
-        // セッション状態を復元
-        sessionState = {
-            region: savedSession.region,
-            difficulty: savedSession.difficulty,
-            currentIndex: savedSession.currentIndex,
-            facesAndNames: savedSession.facesAndNames,
-            timePerFace: savedSession.timePerFace || 10,
-            isActive: true,
-            stopTimer: null,
-            isCompleted: false
-        };
-        
-        // UI要素を更新
-        updateUI();
-        
-        // セクションを表示
-        window.UIManager.showSection('learning-screen');
-        
-        // タイマーを開始
-        startFaceTimer();
-        
-        return true;
     }
     
     // 公開API
