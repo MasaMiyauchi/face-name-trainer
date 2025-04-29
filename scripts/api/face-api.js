@@ -10,10 +10,10 @@ const FaceAPI = (function() {
     
     // バックアップ用のダミー画像URL
     const DUMMY_IMAGES = {
-        'japan': 'assets/faces/japan/',
-        'usa': 'assets/faces/usa/',
-        'europe': 'assets/faces/europe/',
-        'asia': 'assets/faces/asia/',
+        'japan': 'assets/face-data/japan/',
+        'usa': 'assets/face-data/usa/',
+        'europe': 'assets/face-data/europe/',
+        'asia': 'assets/face-data/asia/',
         'default': 'assets/default-face.jpg'
     };
     

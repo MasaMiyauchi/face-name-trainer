@@ -190,7 +190,7 @@ const App = (function() {
         
         // 各地域のフォルダパスを構築
         regions.forEach(region => {
-            const facePath = `assets/faces/${region}`;
+            const facePath = `assets/face-data/${region}`;
             
             // 画像の存在をチェック
             const testImage = new Image();
