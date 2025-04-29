@@ -329,6 +329,7 @@ const FaceGenerator = (function() {
       try {
           // FaceAPIを使って実際の画像を取得
           const imageDataUrl = await window.FaceAPI.getFace(region);
+          const imageSource = window.FaceAPI.getLastImageSource() || '不明なソース';
           
           // 画像サイズを最適化
           const optimizedImageUrl = await optimizeImageSize(imageDataUrl);
@@ -346,8 +347,9 @@ const FaceGenerator = (function() {
               imageData: optimizedImageUrl
           };
       } catch (error) {
-          console.error('Error generating face:', error);
-          throw new Error(`Failed to generate face: ${error.message}`);
+          const imageSource = window.FaceAPI.getLastImageSource() || '不明なソース';
+          console.error(`Error generating face from source [${imageSource}]:`, error);
+          throw new Error(`Failed to generate face from source [${imageSource}]: ${error.message}`);
       }
   }
   
