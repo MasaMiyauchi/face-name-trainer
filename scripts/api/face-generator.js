@@ -371,26 +371,26 @@ const FaceGenerator = (function() {
           const imageKey = `face-image-${metadata.id}`;
           await window.IDBStorage.save(imageKey, imageDataUrl);
           
-          console.log(`Face data saved for ${metadata.id}`);
+          console.log(`Face data saved to IndexedDB for ${metadata.id}`);
       } catch (error) {
           console.error('Error saving to IndexedDB:', error);
+      }
+      
+      try {
+          // LocalStorageにメタデータを保存
+          localStorage.setItem(`face-data-${metadata.region}`, JSON.stringify(faceCache[metadata.region]));
           
-          // フォールバックとしてLocalStorageに保存を試みる
-          try {
-              // LocalStorageにメタデータを保存
-              localStorage.setItem(`face-data-${metadata.region}`, JSON.stringify(faceCache[metadata.region]));
-              
-              // 画像データも保存
-              localStorage.setItem(`face-image-${metadata.id}`, imageDataUrl);
-          } catch (lsError) {
-              // LocalStorageの容量制限に達した場合の処理
-              console.warn('LocalStorage capacity exceeded. Unable to save image data.', lsError);
-              // 最も古い画像を削除して容量を確保
-              removeOldestImage(metadata.region);
-              // 再試行
-              localStorage.setItem(`face-data-${metadata.region}`, JSON.stringify(faceCache[metadata.region]));
-              localStorage.setItem(`face-image-${metadata.id}`, imageDataUrl);
-          }
+          // 画像データも保存
+          localStorage.setItem(`face-image-${metadata.id}`, imageDataUrl);
+          console.log(`Face data saved to localStorage for ${metadata.id}`);
+      } catch (lsError) {
+          // LocalStorageの容量制限に達した場合の処理
+          console.warn('LocalStorage capacity exceeded. Unable to save image data.', lsError);
+          // 最も古い画像を削除して容量を確保
+          removeOldestImage(metadata.region);
+          // 再試行
+          localStorage.setItem(`face-data-${metadata.region}`, JSON.stringify(faceCache[metadata.region]));
+          localStorage.setItem(`face-image-${metadata.id}`, imageDataUrl);
       }
   }
   
