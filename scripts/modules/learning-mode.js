@@ -110,7 +110,7 @@ const LearningMode = (function() {
      * @returns {Promise<void>}
      */
     async function checkRequiredDirectories(region) {
-        const facePath = `assets/faces/${region}`;
+        const facePath = `assets/face-data/${region}`;
         
         // テスト用の画像が存在するか確認
         const imageExists = await checkImageExists(`${facePath}/face1.jpg`);
@@ -375,7 +375,7 @@ const LearningMode = (function() {
                         if (!faceUrl || faceUrl.includes('undefined') || faceUrl.includes('null')) {
                             // ローカルダミー画像のパスを構築
                             const dummyIndex = (i % 5) + 1; // 1-5の範囲
-                            const localPath = `assets/faces/${region}/face${dummyIndex}.jpg`;
+                            const localPath = `assets/face-data/${region}/face${dummyIndex}.jpg`;
                             
                             // 画像の存在を確認
                             const exists = await checkImageExists(localPath);
@@ -410,7 +410,7 @@ const LearningMode = (function() {
                 // エラー時はダミー画像を使用
                 // 地域ごとのダミー画像をインデックスによって変える
                 const dummyIndex = (i % 5) + 1; // 1-5の範囲で循環
-                const fallbackPath = `assets/faces/${region}/face${dummyIndex}.jpg`;
+                const fallbackPath = `assets/face-data/${region}/face${dummyIndex}.jpg`;
                 
                 // 存在チェック
                 const fallbackExists = await checkImageExists(fallbackPath);
