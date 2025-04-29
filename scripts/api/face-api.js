@@ -22,6 +22,7 @@ const FaceAPI = (function() {
     // キャッシュ用のオブジェクト
     let imageCache = {};
     let useLocalImagesOnly = false; // オフラインモードフラグ
+    let lastImageSource = null; // 最後に取得を試みた画像ソース
     
     /**
      * 新しいAI生成顔画像を取得する
@@ -32,12 +33,15 @@ const FaceAPI = (function() {
         try {
             // キャッシュに既に存在するかチェック
             if (region && imageCache[region] && imageCache[region].length > 0) {
+                lastImageSource = `cache:${region}`;
                 return imageCache[region].pop();
             }
             
             // オフラインモードの場合はダミー画像を返す
             if (useLocalImagesOnly) {
-                return getLocalDummyImage(region);
+                const dummyPath = getLocalDummyImage(region);
+                lastImageSource = dummyPath;
+                return dummyPath;
             }
             
             // API制限回避のためのランダムパラメータを作成
@@ -46,6 +50,7 @@ const FaceAPI = (function() {
             
             // CORSプロキシ経由でAPIにアクセス
             const url = `${CORS_PROXY}${encodeURIComponent(API_URL)}?${randomParam}`;
+            lastImageSource = url;
             console.log('Fetching face from:', url);
             
             // fetch APIを使用して画像を取得
@@ -78,14 +83,16 @@ const FaceAPI = (function() {
             
             return dataUrl;
         } catch (error) {
-            console.error('Error fetching face image:', error);
+            console.error(`Error fetching face image from [${lastImageSource}]:`, error);
             console.log('Falling back to local dummy image');
             
             // 一定回数エラーが続くとオフラインモードに切り替え
             useLocalImagesOnly = true;
             
             // エラー時はダミー画像を返す
-            return getLocalDummyImage(region);
+            const dummyPath = getLocalDummyImage(region);
+            lastImageSource = dummyPath;
+            return dummyPath;
         }
     }
     
@@ -162,12 +169,21 @@ const FaceAPI = (function() {
         useLocalImagesOnly = offline;
     }
     
+    /**
+     * 最後に取得を試みた画像ソースを取得
+     * @returns {string} - 画像ソースURL
+     */
+    function getLastImageSource() {
+        return lastImageSource || 'unknown';
+    }
+    
     // 公開API
     return {
         getFace,
         preloadFaces,
         clearCache,
-        setOfflineMode
+        setOfflineMode,
+        getLastImageSource
     };
 })();
 
