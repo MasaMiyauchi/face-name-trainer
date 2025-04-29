@@ -99,8 +99,16 @@ const FaceAPI = (function() {
         const basePath = DUMMY_IMAGES[region] || DUMMY_IMAGES['default'];
         
         if (basePath.endsWith('/')) {
-            // フォルダの場合、ランダムな番号を付けて画像を選択
-            const randomIndex = Math.floor(Math.random() * 5) + 1; // 1から5の範囲
+            const availableFaces = {
+                'japan': [1, 3, 4, 5],  // face2.jpgが存在しない
+                'usa': [1],             // face1.jpgのみ存在
+                'europe': [1],          // face1.jpgのみ存在
+                'asia': [1]             // face1.jpgのみ存在
+            };
+            
+            const faceIndices = availableFaces[region] || [1]; // デフォルトはface1.jpg
+            
+            const randomIndex = faceIndices[Math.floor(Math.random() * faceIndices.length)];
             return `${basePath}face${randomIndex}.jpg`;
         } else {
             // 単一のダミー画像の場合
