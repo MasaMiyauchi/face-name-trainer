@@ -209,8 +209,9 @@ const FaceGenerator = (function() {
               resolve(optimizedDataUrl);
           };
           
-          img.onerror = function() {
-              reject(new Error('画像の最適化に失敗しました'));
+          img.onerror = function(event) {
+              console.error('画像の読み込みに失敗しました:', event);
+              reject(new Error('画像の読み込みに失敗しました: 画像ソースが無効か、アクセスできません'));
           };
           
           img.src = imageDataUrl;
